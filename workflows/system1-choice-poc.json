@@ -1,0 +1,56 @@
+{
+  "id": "system1ChoiceDemo",
+  "name": "System 1 (Laya) Question + Choices PoC",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b2000000-0000-4000-8000-000000000001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Edit these questions freely. Keys of `choices` are the answer labels; values describe each option.\nreturn [\n  { json: { question: 'What is the capital of France?', choices: { paris: 'Paris', london: 'London', berlin: 'Berlin', madrid: 'Madrid' } } },\n  { json: { question: 'Which planet is known as the Red Planet?', choices: { venus: 'Venus', mars: 'Mars', jupiter: 'Jupiter' } } },\n  { json: { question: 'A customer says: I was charged twice. Which team should handle it?', choices: { billing: 'Billing team', infra: 'Infrastructure team', sales: 'Sales team' } } }\n];"
+      },
+      "id": "b2000000-0000-4000-8000-000000000002",
+      "name": "Questions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11435/api/decide",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'laya:en',\n  state: $json.question,\n  questions: {\n    answer: { type: 'choice', instructions: 'Which choice is the most likely correct answer to the question?', criteria: $json.choices }\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "b2000000-0000-4000-8000-000000000003",
+      "name": "Ollaya Decide",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((item, i) => {\n  const q = $('Questions').all()[i].json;\n  const a = item.json.answers.answer;\n  return { json: {\n    question: q.question,\n    pick: a.choice,\n    confidence: a.confidence,\n    probabilities: a.probabilities,\n    output_tokens: item.json.usage.output_tokens,\n    latency_ms: Math.round(item.json.total_duration / 1e6)\n  } };\n});"
+      },
+      "id": "b2000000-0000-4000-8000-000000000004",
+      "name": "Format Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": { "main": [[{ "node": "Questions", "type": "main", "index": 0 }]] },
+    "Questions": { "main": [[{ "node": "Ollaya Decide", "type": "main", "index": 0 }]] },
+    "Ollaya Decide": { "main": [[{ "node": "Format Result", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}
