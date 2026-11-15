@@ -1,0 +1,239 @@
+{
+  "name": "System 1 vs System 2 - Ticket Triage Comparison (Evaluation)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "tickets"
+        }
+      },
+      "id": "c1100000-0000-4000-8000-000000000001",
+      "name": "When fetching a dataset row",
+      "type": "n8n-nodes-base.evaluationTrigger",
+      "typeVersion": 4.7,
+      "position": [
+        0,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11435/api/decide",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'laya:en',\n  state: $json.ticket,\n  questions: {\n    urgent: { type: 'noul', instructions: 'Is this urgent and business-critical?' },\n    team: { type: 'choice', criteria: { infra: 'Infrastructure outage or technical failure', billing: 'Billing or payment issue', sales: 'Sales or pricing inquiry' } }\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "c1100000-0000-4000-8000-000000000002",
+      "name": "Laya Decide (S1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gemma4:12b-mlx',\n  stream: false,\n  format: 'json',\n  options: { temperature: 0 },\n  prompt: [\n    'You are a support ticket triage system. Read the ticket and decide:',\n    '1. urgent - probability from 0 to 1 that this ticket is urgent and business-critical.',\n    '2. team - exactly one of \"infra\" (infrastructure outage or technical failure), \"billing\" (billing or payment issue), \"sales\" (sales or pricing inquiry).',\n    '3. confidence - your confidence from 0 to 1 in the team choice.',\n    'Reply with ONLY a JSON object, no explanation, no markdown: {\"urgent\": <number>, \"team\": \"<infra|billing|sales>\", \"confidence\": <number>}',\n    '',\n    'Ticket: ' + $json.ticket\n  ].join('\\n')\n}) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "c1100000-0000-4000-8000-000000000003",
+      "name": "Ollama Generate (S2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Same tolerant parser as the System 2 demo workflow: strip fences, slice the\n// JSON object out of any surrounding prose, validate the fields, flag failures.\nreturn $input.all().map((item) => {\n  const raw = String(item.json.response ?? '').trim();\n  const latency_ms = Math.round((item.json.total_duration || 0) / 1e6);\n  const output_tokens = item.json.eval_count ?? null;\n  let parsed = null;\n  let parse_error = null;\n  try {\n    const cleaned = raw.replace(/```(json)?/gi, '');\n    const start = cleaned.indexOf('{');\n    const end = cleaned.lastIndexOf('}');\n    if (start === -1 || end === -1 || end <= start) throw new Error('no JSON object in response');\n    parsed = JSON.parse(cleaned.slice(start, end + 1));\n  } catch (e) {\n    parse_error = 'parse_failed: ' + e.message;\n  }\n  let urgent = null, team = null, confidence = null;\n  if (parsed) {\n    urgent = typeof parsed.urgent === 'number' ? parsed.urgent : null;\n    team = ['infra', 'billing', 'sales'].includes(parsed.team) ? parsed.team : null;\n    confidence = typeof parsed.confidence === 'number' ? parsed.confidence : null;\n    if (urgent === null || team === null) parse_error = 'invalid_fields: ' + raw.slice(0, 120);\n  }\n  return { json: { urgent, team, confidence, parse_error, output_tokens, latency_ms } };\n});"
+      },
+      "id": "c1100000-0000-4000-8000-000000000004",
+      "name": "Parse LLM JSON (S2)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pull one row from each branch and shape the side-by-side result.\n// Everything is written as TEXT so a CSV-imported Data Table (all string columns) accepts it.\nconst row = $('When fetching a dataset row').first().json;\nconst s1raw = $('Laya Decide (S1)').first().json;\nconst s2 = $('Parse LLM JSON (S2)').first().json;\n\nconst s1_team = s1raw.answers?.team?.choice ?? '';\nconst s1_confidence = s1raw.answers?.team?.confidence ?? '';\nconst s1_urgent = s1raw.answers?.urgent?.noul ?? '';\nconst s1_latency_ms = Math.round((s1raw.total_duration || 0) / 1e6);\n\nconst expected = String(row.expected_team ?? '').trim();\nconst agree = (s1_team && s2.team) ? (s1_team === s2.team ? 'agree' : 'DISAGREE') : '';\nconst s1_correct = expected ? (s1_team === expected ? 'correct' : 'WRONG') : '';\nconst s2_correct = expected ? (s2.parse_error ? 'PARSE FAILED' : (s2.team === expected ? 'correct' : 'WRONG')) : '';\n\nconst fmt = (v) => (typeof v === 'number' ? String(Math.round(v * 1000) / 1000) : String(v ?? ''));\n\nreturn [{ json: {\n  s1_team,\n  s1_confidence: fmt(s1_confidence),\n  s1_urgent: fmt(s1_urgent),\n  s1_latency_ms: String(s1_latency_ms),\n  s2_team: s2.team || '',\n  s2_confidence: fmt(s2.confidence),\n  s2_urgent: fmt(s2.urgent),\n  s2_latency_ms: fmt(s2.latency_ms),\n  s2_parse_error: s2.parse_error || '',\n  agree,\n  s1_correct,\n  s2_correct\n} }];"
+      },
+      "id": "c1100000-0000-4000-8000-000000000005",
+      "name": "Compare & Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "tickets"
+        },
+        "outputs": {
+          "values": [
+            {
+              "outputName": "s1_team",
+              "outputValue": "={{ $json.s1_team }}"
+            },
+            {
+              "outputName": "s1_confidence",
+              "outputValue": "={{ $json.s1_confidence }}"
+            },
+            {
+              "outputName": "s1_urgent",
+              "outputValue": "={{ $json.s1_urgent }}"
+            },
+            {
+              "outputName": "s1_latency_ms",
+              "outputValue": "={{ $json.s1_latency_ms }}"
+            },
+            {
+              "outputName": "s2_team",
+              "outputValue": "={{ $json.s2_team }}"
+            },
+            {
+              "outputName": "s2_confidence",
+              "outputValue": "={{ $json.s2_confidence }}"
+            },
+            {
+              "outputName": "s2_urgent",
+              "outputValue": "={{ $json.s2_urgent }}"
+            },
+            {
+              "outputName": "s2_latency_ms",
+              "outputValue": "={{ $json.s2_latency_ms }}"
+            },
+            {
+              "outputName": "s2_parse_error",
+              "outputValue": "={{ $json.s2_parse_error }}"
+            },
+            {
+              "outputName": "agree",
+              "outputValue": "={{ $json.agree }}"
+            },
+            {
+              "outputName": "s1_correct",
+              "outputValue": "={{ $json.s1_correct }}"
+            },
+            {
+              "outputName": "s2_correct",
+              "outputValue": "={{ $json.s2_correct }}"
+            }
+          ]
+        }
+      },
+      "id": "c1100000-0000-4000-8000-000000000006",
+      "name": "Write Results to Dataset",
+      "type": "n8n-nodes-base.evaluation",
+      "typeVersion": 4.8,
+      "position": [
+        1100,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## SETUP (one time)\n\n1. In n8n: **Data tables** -> create a table named `tickets` and import `datasets/tickets.csv` from this repo.\n2. In BOTH evaluation nodes (**When fetching a dataset row** and **Write Results to Dataset**), select your `tickets` table.\n3. Make sure ollaya (port 11435) and Ollama (port 11434) are running on the host.\n\n## RUN\n\nWorkflow **Evaluations** tab -> **Run test**. Each dataset row runs through BOTH System 1 (ollaya laya:en) and System 2 (Ollama LLM) in the same execution, and the side-by-side columns (team, confidence, urgent, latency per system, plus agree/correct flags) are written back to the table. Result columns are text so CSV-imported tables accept them.\n\nThe S2 model name lives in ONE place: the `model` field of **Ollama Generate (S2)** (currently `gemma4:12b-mlx`).",
+        "height": 420,
+        "width": 560,
+        "color": 4
+      },
+      "id": "c1100000-0000-4000-8000-000000000007",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -140,
+        -120
+      ]
+    }
+  ],
+  "connections": {
+    "When fetching a dataset row": {
+      "main": [
+        [
+          {
+            "node": "Laya Decide (S1)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ollama Generate (S2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Generate (S2)": {
+      "main": [
+        [
+          {
+            "node": "Parse LLM JSON (S2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Laya Decide (S1)": {
+      "main": [
+        [
+          {
+            "node": "Compare & Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse LLM JSON (S2)": {
+      "main": [
+        [
+          {
+            "node": "Compare & Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare & Score": {
+      "main": [
+        [
+          {
+            "node": "Write Results to Dataset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
