@@ -10,6 +10,7 @@ Companion code for the talk **"The Two-Tier AI Stack - Decision and Reasoning"**
 - `workflows/system2-ticket-triage.json` - System Two comparison: same tickets, same routing rule, but a general LLM via Ollama (port 11434) answers. Needs an installed Ollama model - default `gemma4:12b-mlx` (confirmed installed), swap it in the **Ollama Generate (System 2)** node. Untested on a live machine yet.
 - `workflows/compare-s1-s2-evaluation.json` - standalone comparison workflow (n8n Evaluations): runs every ticket in a Data Table through BOTH systems in the same run and writes side-by-side results back. Leaves the two demo workflows untouched.
 - `datasets/tickets.csv` - the tickets dataset for the comparison workflow (import it into an n8n Data Table).
+- `workflows/system1-ticket-triage-chat.json` - the same S1 triage engine with a chat front (n8n hosted chat): a ticket arrives as a chat message, the decision posts back as the reply. An extra option for the live demo, not a replacement.
 - `fallback/` - demo-day insurance: canned ollaya responses, a one-field-switch responder workflow, and a recording shot list. See [Fallback plan](#fallback-plan-if-the-live-demo-dies).
 - `workflows/system1-choice-poc.json` - minimal question + choices proof of concept against the same endpoint.
 - `docker-compose.yml` - slim local n8n stack (just n8n, nothing else).
@@ -54,6 +55,16 @@ Uses n8n's Evaluations feature - free on self-hosted community.
 ### 5. Run the demos
 
 Open **System 1 (Laya) Ticket Triage**, hit **Execute workflow**, and watch each ticket come back with a team pick, confidence, urgency score, output token count, and latency in milliseconds.
+
+### 6. (Optional) Demo through the chat front
+
+`workflows/system1-ticket-triage-chat.json` runs the identical ollaya call and routing rules, but the audience watches a chat: a ticket arrives as a chat message, the workflow runs, and the decision (team, confidence, urgency, route, latency) posts back as the reply.
+
+1. Import `workflows/system1-ticket-triage-chat.json` and **activate** it - the hosted chat only listens while the workflow is active.
+2. Open http://localhost:5678/webhook/system1-triage-chat/chat in a browser tab (the Chat Trigger node is in hosted-chat mode; the four demo tickets are pre-filled in its opening message).
+3. Paste a ticket, send, and the routing decision appears in the chat a beat later.
+
+Good on a big screen for "tickets arriving as messages" discussion. The canned fallback works here too: point the same one URL field at the canned responder (see `fallback/README.md`).
 
 ## Fallback plan (if the live demo dies)
 
