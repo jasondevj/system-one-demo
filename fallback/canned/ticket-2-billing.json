@@ -1,0 +1,21 @@
+{
+  "model": "laya:en",
+  "answers": {
+    "urgent": {
+      "noul": 0.42
+    },
+    "team": {
+      "choice": "billing",
+      "confidence": 0.88,
+      "probabilities": {
+        "billing": 0.88,
+        "sales": 0.08,
+        "infra": 0.04
+      }
+    }
+  },
+  "usage": {
+    "output_tokens": 12
+  },
+  "total_duration": 158000000
+}
