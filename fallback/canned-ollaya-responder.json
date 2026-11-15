@@ -1,0 +1,93 @@
+{
+  "name": "Canned ollaya responder (demo fallback)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "canned-ollaya",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d1100000-0000-4000-8000-000000000001",
+      "name": "Webhook - canned decide",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Canned ollaya /api/decide responder.\n// Reads the ticket text from the request body (field \"state\", same as the real API)\n// and answers with the matching canned response. Unknown tickets get the\n// low-confidence \"hmm\" answer - which the demo workflow correctly routes to human_review.\n// To use REAL captures instead, replace the CANNED object below with the contents of\n// fallback/canned/*.json after running fallback/capture-canned.sh.\nconst CANNED = {\n  \"ticket-1-infra\": {\n    \"model\": \"laya:en\",\n    \"answers\": {\n      \"urgent\": {\n        \"noul\": 0.97\n      },\n      \"team\": {\n        \"choice\": \"infra\",\n        \"confidence\": 0.94,\n        \"probabilities\": {\n          \"infra\": 0.94,\n          \"billing\": 0.04,\n          \"sales\": 0.02\n        }\n      }\n    },\n    \"usage\": {\n      \"output_tokens\": 12\n    },\n    \"total_duration\": 172000000\n  },\n  \"ticket-2-billing\": {\n    \"model\": \"laya:en\",\n    \"answers\": {\n      \"urgent\": {\n        \"noul\": 0.42\n      },\n      \"team\": {\n        \"choice\": \"billing\",\n        \"confidence\": 0.88,\n        \"probabilities\": {\n          \"billing\": 0.88,\n          \"sales\": 0.08,\n          \"infra\": 0.04\n        }\n      }\n    },\n    \"usage\": {\n      \"output_tokens\": 12\n    },\n    \"total_duration\": 158000000\n  },\n  \"ticket-3-sales\": {\n    \"model\": \"laya:en\",\n    \"answers\": {\n      \"urgent\": {\n        \"noul\": 0.08\n      },\n      \"team\": {\n        \"choice\": \"sales\",\n        \"confidence\": 0.9,\n        \"probabilities\": {\n          \"sales\": 0.9,\n          \"billing\": 0.07,\n          \"infra\": 0.03\n        }\n      }\n    },\n    \"usage\": {\n      \"output_tokens\": 11\n    },\n    \"total_duration\": 149000000\n  },\n  \"ticket-4-hmm\": {\n    \"model\": \"laya:en\",\n    \"answers\": {\n      \"urgent\": {\n        \"noul\": 0.05\n      },\n      \"team\": {\n        \"choice\": \"sales\",\n        \"confidence\": 0.36,\n        \"probabilities\": {\n          \"sales\": 0.36,\n          \"billing\": 0.33,\n          \"infra\": 0.31\n        }\n      }\n    },\n    \"usage\": {\n      \"output_tokens\": 9\n    },\n    \"total_duration\": 143000000\n  }\n};\n\nconst state = String(($json.body && $json.body.state) ?? $json.state ?? '').toLowerCase();\nlet pick;\nif (state.includes('production server is down')) pick = CANNED['ticket-1-infra'];\nelse if (state.includes('charged twice')) pick = CANNED['ticket-2-billing'];\nelse if (state.includes('volume discounts')) pick = CANNED['ticket-3-sales'];\nelse pick = CANNED['ticket-4-hmm'];\n\nreturn [{ json: { canned: pick } }];"
+      },
+      "id": "d1100000-0000-4000-8000-000000000002",
+      "name": "Pick canned response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.canned) }}",
+        "options": {}
+      },
+      "id": "d1100000-0000-4000-8000-000000000003",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Canned ollaya responder (fallback path)\n\nACTIVATE this workflow (top-right toggle) - webhooks only listen while active.\n\nIt answers POST /webhook/canned-ollaya exactly like ollaya's /api/decide, picking a canned response by matching the ticket text. Unknown tickets get the low-confidence answer (routes to human_review - correct behavior).\n\nThen change ONE field in the demo workflow: in **Laya Decide (System 1)** (and **Ollaya Decide** in the choice PoC), point the URL from\n  http://host.docker.internal:11435/api/decide\nto\n  http://host.docker.internal:5678/webhook/canned-ollaya\n(On Linux use http://localhost:5678/... if host.docker.internal does not resolve.)\n\nNothing else changes - same workflow, same routing logic, same output fields.",
+        "height": 460,
+        "width": 520,
+        "color": 4
+      },
+      "id": "d1100000-0000-4000-8000-000000000004",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -540
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - canned decide": {
+      "main": [
+        [
+          {
+            "node": "Pick canned response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick canned response": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
