@@ -7,6 +7,7 @@ Companion code for the talk **"The Two-Tier AI Stack - Decision and Reasoning"**
 ## What's here
 
 - `workflows/system1-ticket-triage.json` - n8n workflow: four sample support tickets -> ollaya `/api/decide` (urgent? which team?) -> deterministic routing. "Smart-If": the AI perceives, the code decides.
+- `workflows/system2-ticket-triage.json` - System Two comparison: same tickets, same routing rule, but a general LLM via Ollama (port 11434) answers. Needs an installed Ollama model - default `gemma4:12b-mlx` (confirmed installed), swap it in the **Ollama Generate (System 2)** node. Untested on a live machine yet.
 - `workflows/system1-choice-poc.json` - minimal question + choices proof of concept against the same endpoint.
 - `docker-compose.yml` - slim local n8n stack (just n8n, nothing else).
 - `.env.example` - n8n version pin.
@@ -52,6 +53,5 @@ Open **System 1 (Laya) Ticket Triage**, hit **Execute workflow**, and watch each
 
 ## Still being added (talk prep in progress)
 
-- [ ] **System Two variant** of the ticket triage: same tickets, same routing rule, answered by a local LLM via Ollama - for the live latency comparison
 - [ ] Canned ollaya JSON responses and a fallback recording, in case the demo gods frown
 - [ ] Measured latency table: System One vs System Two on the same ticket
