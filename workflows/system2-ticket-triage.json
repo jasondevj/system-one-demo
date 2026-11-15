@@ -1,0 +1,142 @@
+{
+  "id": "system2TriageDemo",
+  "name": "System 2 (Ollama LLM) Ticket Triage",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b3100000-0000-4000-8000-000000000001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { json: { ticket: 'Production server is down, customers cannot log in, revenue impacted' } },\n  { json: { ticket: 'I was charged twice for my subscription this month' } },\n  { json: { ticket: 'Do you offer volume discounts for 500 seats?' } },\n  { json: { ticket: 'hmm' } }\n];"
+      },
+      "id": "b3100000-0000-4000-8000-000000000002",
+      "name": "Sample Tickets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'llama3.1',\n  stream: false,\n  format: 'json',\n  options: { temperature: 0 },\n  prompt: [\n    'You are a support ticket triage system. Read the ticket and decide:',\n    '1. urgent - probability from 0 to 1 that this ticket is urgent and business-critical.',\n    '2. team - exactly one of \"infra\" (infrastructure outage or technical failure), \"billing\" (billing or payment issue), \"sales\" (sales or pricing inquiry).',\n    '3. confidence - your confidence from 0 to 1 in the team choice.',\n    'Reply with ONLY a JSON object, no explanation, no markdown: {\"urgent\": <number>, \"team\": \"<infra|billing|sales>\", \"confidence\": <number>}',\n    '',\n    'Ticket: ' + $json.ticket\n  ].join('\\n')\n}) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "b3100000-0000-4000-8000-000000000003",
+      "name": "Ollama Generate (System 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// The System 2 reality: a general model returns free text, so we parse it.\n// Tolerate markdown fences and surrounding prose. Any failure is flagged,\n// and the Route Decision node sends flagged tickets to human_review.\nreturn $input.all().map((item, i) => {\n  const raw = String(item.json.response ?? '').trim();\n  const ticket = $('Sample Tickets').all()[i].json.ticket;\n  const latency_ms = Math.round((item.json.total_duration || 0) / 1e6);\n  const output_tokens = item.json.eval_count ?? null;\n  let parsed = null;\n  let parse_error = null;\n  try {\n    const cleaned = raw.replace(/```(json)?/gi, '');\n    const start = cleaned.indexOf('{');\n    const end = cleaned.lastIndexOf('}');\n    if (start === -1 || end === -1 || end <= start) throw new Error('no JSON object in response');\n    parsed = JSON.parse(cleaned.slice(start, end + 1));\n  } catch (e) {\n    parse_error = 'parse_failed: ' + e.message;\n  }\n  let urgent = null, team = null, confidence = null;\n  if (parsed) {\n    urgent = typeof parsed.urgent === 'number' ? parsed.urgent : null;\n    team = ['infra', 'billing', 'sales'].includes(parsed.team) ? parsed.team : null;\n    confidence = typeof parsed.confidence === 'number' ? parsed.confidence : null;\n    if (urgent === null || team === null) parse_error = 'invalid_fields: ' + raw.slice(0, 120);\n  }\n  return { json: { ticket, urgent, team, confidence, parse_error, output_tokens, latency_ms, raw_response: raw.slice(0, 500) } };\n});"
+      },
+      "id": "b3100000-0000-4000-8000-000000000004",
+      "name": "Parse LLM JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Same routing rule as System 1: AI perceives, deterministic code decides.\n// Extra branch: parse failures go to human_review (the System 2 failure mode System 1 doesn't have).\nconst CONF_MIN = 0.6;\nreturn $input.all().map((item) => {\n  const { ticket, urgent, team, confidence, parse_error, output_tokens, latency_ms } = item.json;\n  let route;\n  if (parse_error) route = 'human_review';\n  else if (confidence < CONF_MIN) route = 'human_review';\n  else if (urgent >= 0.7) route = 'page_oncall:' + team;\n  else route = 'queue:' + team;\n  return { json: { ticket, urgent, team, confidence, route, output_tokens, latency_ms } };\n});"
+      },
+      "id": "b3100000-0000-4000-8000-000000000005",
+      "name": "Route Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## MODEL SWAP HERE\n\nThe model name lives in ONE place: the `model` field of the **Ollama Generate (System 2)** node's JSON body (currently `llama3.1`).\n\nSwap it for a model installed on your machine - run `ollama list` to see what you have.\n\nRequires Ollama running on the host (port 11434). UNTESTED end-to-end - validate before the talk.",
+        "height": 300,
+        "width": 420,
+        "color": 4
+      },
+      "id": "b3100000-0000-4000-8000-000000000006",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        -260
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Sample Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sample Tickets": {
+      "main": [
+        [
+          {
+            "node": "Ollama Generate (System 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Generate (System 2)": {
+      "main": [
+        [
+          {
+            "node": "Parse LLM JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse LLM JSON": {
+      "main": [
+        [
+          {
+            "node": "Route Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
