@@ -33,7 +33,7 @@
         "url": "http://host.docker.internal:11434/api/generate",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: 'llama3.1',\n  stream: false,\n  format: 'json',\n  options: { temperature: 0 },\n  prompt: [\n    'You are a support ticket triage system. Read the ticket and decide:',\n    '1. urgent - probability from 0 to 1 that this ticket is urgent and business-critical.',\n    '2. team - exactly one of \"infra\" (infrastructure outage or technical failure), \"billing\" (billing or payment issue), \"sales\" (sales or pricing inquiry).',\n    '3. confidence - your confidence from 0 to 1 in the team choice.',\n    'Reply with ONLY a JSON object, no explanation, no markdown: {\"urgent\": <number>, \"team\": \"<infra|billing|sales>\", \"confidence\": <number>}',\n    '',\n    'Ticket: ' + $json.ticket\n  ].join('\\n')\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gemma4:12b-mlx',\n  stream: false,\n  format: 'json',\n  options: { temperature: 0 },\n  prompt: [\n    'You are a support ticket triage system. Read the ticket and decide:',\n    '1. urgent - probability from 0 to 1 that this ticket is urgent and business-critical.',\n    '2. team - exactly one of \"infra\" (infrastructure outage or technical failure), \"billing\" (billing or payment issue), \"sales\" (sales or pricing inquiry).',\n    '3. confidence - your confidence from 0 to 1 in the team choice.',\n    'Reply with ONLY a JSON object, no explanation, no markdown: {\"urgent\": <number>, \"team\": \"<infra|billing|sales>\", \"confidence\": <number>}',\n    '',\n    'Ticket: ' + $json.ticket\n  ].join('\\n')\n}) }}",
         "options": {
           "timeout": 120000
         }
@@ -75,7 +75,7 @@
     },
     {
       "parameters": {
-        "content": "## MODEL SWAP HERE\n\nThe model name lives in ONE place: the `model` field of the **Ollama Generate (System 2)** node's JSON body (currently `llama3.1`).\n\nSwap it for a model installed on your machine - run `ollama list` to see what you have.\n\nRequires Ollama running on the host (port 11434). UNTESTED end-to-end - validate before the talk.",
+        "content": "## MODEL SWAP HERE\n\nThe model name lives in ONE place: the `model` field of the **Ollama Generate (System 2)** node's JSON body (currently `gemma4:12b-mlx`).\n\nSwap it for a model installed on your machine - run `ollama list` to see what you have.\n\nRequires Ollama running on the host (port 11434). UNTESTED end-to-end - validate before the talk.",
         "height": 300,
         "width": 420,
         "color": 4
