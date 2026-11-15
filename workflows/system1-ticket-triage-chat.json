@@ -1,0 +1,121 @@
+{
+  "name": "System 1 (Laya) Ticket Triage - Chat Front",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "hostedChat",
+        "public": true,
+        "initialMessages": "Send me a support ticket and I'll triage it.\nTry one of these:\n- Production server is down, customers cannot log in, revenue impacted\n- I was charged twice for my subscription this month\n- Do you offer volume discounts for 500 seats?\n- hmm",
+        "options": {}
+      },
+      "id": "c1000000-0000-4000-8000-000000000001",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "system1-triage-chat"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11435/api/decide",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'laya:en',\n  state: $json.chatInput,\n  questions: {\n    urgent: { type: 'noul', instructions: 'Is this urgent and business-critical?' },\n    team: { type: 'choice', criteria: { infra: 'Infrastructure outage or technical failure', billing: 'Billing or payment issue', sales: 'Sales or pricing inquiry' } }\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "c1000000-0000-4000-8000-000000000002",
+      "name": "Laya Decide (System 1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Smart-If: AI perceives, deterministic code decides. Same rules as the demo workflow.\nconst CONF_MIN = 0.6;\nreturn $input.all().map((item) => {\n  const a = item.json.answers;\n  const ticket = $('Chat Trigger').first().json.chatInput;\n  const urgent = a.urgent.noul;\n  const team = a.team.choice;\n  const conf = a.team.confidence;\n  let route;\n  if (conf < CONF_MIN) route = 'human_review';\n  else if (urgent >= 0.7) route = 'page_oncall:' + team;\n  else route = 'queue:' + team;\n  return { json: { ticket, urgent, team, confidence: conf, route, output_tokens: item.json.usage.output_tokens, latency_ms: Math.round(item.json.total_duration / 1e6) } };\n});"
+      },
+      "id": "c1000000-0000-4000-8000-000000000003",
+      "name": "Route Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// The hosted chat replies with this item's `output` field (chat trigger response mode: last node).\nreturn $input.all().map((item) => {\n  const d = item.json;\n  const lines = [\n    'Routing decision',\n    '',\n    'Team: ' + d.team + ' (confidence ' + Number(d.confidence).toFixed(2) + ')',\n    'Urgent: ' + Number(d.urgent).toFixed(2),\n    'Route: ' + d.route,\n    'ollaya latency: ' + d.latency_ms + ' ms (' + d.output_tokens + ' output tokens)',\n  ];\n  return { json: { output: lines.join('\\n') } };\n});"
+      },
+      "id": "c1000000-0000-4000-8000-000000000004",
+      "name": "Format Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## CHAT FRONT FOR THE S1 DEMO\n\nSame engine as **System 1 (Laya) Ticket Triage** - identical ollaya call and identical routing rules - but tickets arrive as chat messages and the decision posts back into the chat.\n\nTO RUN:\n1. ACTIVATE this workflow (hosted chat only listens when active).\n2. Open http://localhost:5678/webhook/system1-triage-chat/chat in a browser tab.\n3. Paste a ticket (the 4 demo tickets are pre-filled in the chat's initial message).\n\nFallback: point the ONE URL field in **Laya Decide (System 1)** at the canned responder (see fallback/README.md) and the chat demo works with no live model.",
+        "height": 340,
+        "width": 440,
+        "color": 4
+      },
+      "id": "c1000000-0000-4000-8000-000000000005",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -280
+      ]
+    }
+  ],
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "Laya Decide (System 1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Laya Decide (System 1)": {
+      "main": [
+        [
+          {
+            "node": "Route Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Decision": {
+      "main": [
+        [
+          {
+            "node": "Format Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
