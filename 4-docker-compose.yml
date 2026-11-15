@@ -1,0 +1,14 @@
+volumes:
+  n8n_data:
+    name: system_one_demo_n8n_data
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:-2.44.4}
+    container_name: system-one-demo-n8n
+    ports:
+      - '5678:5678'
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # Repo workflows are available inside the container at /data/workflows
+      - ./workflows:/data/workflows:ro
