@@ -7,7 +7,7 @@ Companion code for the talk **"The Two-Tier AI Stack - Decision and Reasoning"**
 ## What's here
 
 - `workflows/system1-ticket-triage.json` - n8n workflow: four sample support tickets -> ollaya `/api/decide` (urgent? which team?) -> deterministic routing. "Smart-If": the AI perceives, the code decides.
-- `workflows/system2-ticket-triage.json` - System Two comparison: same tickets, same routing rule, but a general LLM via Ollama (port 11434) answers. Needs an installed Ollama model - default `gemma4:12b-mlx` (confirmed installed), swap it in the **Ollama Generate (System 2)** node. Untested on a live machine yet.
+- `workflows/system2-ticket-triage.json` - System Two comparison: same tickets, same routing rule, but a general LLM via Ollama (port 11434) answers. Needs Ollama with a model pulled - default `gemma4:12b-mlx`, swap it in the **Ollama Generate (System 2)** node. Untested on a live machine yet.
 - `workflows/compare-s1-s2-evaluation.json` - standalone comparison workflow (n8n Evaluations): runs every ticket in a Data Table through BOTH systems in the same run and writes side-by-side results back. Leaves the two demo workflows untouched.
 - `datasets/tickets.csv` - the tickets dataset for the comparison workflow (import it into an n8n Data Table).
 - `workflows/system1-ticket-triage-chat.json` - the same S1 triage engine with a chat front (n8n hosted chat): a ticket arrives as a chat message, the decision posts back as the reply. An extra option for the live demo, not a replacement.
@@ -45,7 +45,7 @@ The System 1 side POSTs to `http://host.docker.internal:11435/api/decide` (ollay
 
 ### 4. (Optional) Run the S1 vs S2 comparison
 
-Uses n8n's Evaluations feature - free on self-hosted community.
+Uses n8n's Evaluations feature - free on self-hosted, but the **Run test** button needs a registered Community edition (free, one minute - see [Fresh machine notes](#fresh-machine-notes)).
 
 1. In n8n, open **Data tables**, create a table named `tickets`, and import `datasets/tickets.csv` from this repo.
 2. Import `workflows/compare-s1-s2-evaluation.json`, then in BOTH evaluation nodes (**When fetching a dataset row** and **Write Results to Dataset**), select your `tickets` table.
@@ -65,6 +65,12 @@ Open **System 1 (Laya) Ticket Triage**, hit **Execute workflow**, and watch each
 3. Paste a ticket, send, and the routing decision appears in the chat a beat later.
 
 Good on a big screen for "tickets arriving as messages" discussion. The canned fallback works here too: point the same one URL field at the canned responder (see `fallback/README.md`).
+
+## Fresh machine notes
+
+- **Ollama + the one heavy download.** The System 2 comparison needs Ollama (https://ollama.com) with a model pulled: `ollama pull gemma4:12b-mlx`. This is the only large download in the whole setup (several GB) - pull it on good wifi before the event, not on venue wifi. Everything else (n8n image, ollaya, the workflows) is small. To use a different model, change it in the **Ollama Generate (System 2)** node.
+- **Evaluations "Run test" needs a registered Community edition.** Still free: **Settings > Usage and plan > Unlock**, enter your email, and activate the key from the email n8n sends. Registration is per instance, but the same Community key can be activated up to 5 times (n8n FAQ), so one email covers several machines. Without it the comparison workflow still imports and runs manually - only the **Run test** button asks.
+- **host.docker.internal.** The workflows reach ollaya and Ollama on your host through `host.docker.internal`. Docker Desktop on Mac and Windows resolves this natively - nothing to configure. On Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` to the n8n service in the compose file (or swap in your host's gateway IP).
 
 ## Fallback plan (if the live demo dies)
 
