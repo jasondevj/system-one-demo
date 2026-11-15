@@ -1,0 +1,5 @@
+ticket,expected_team,s1_team,s1_confidence,s1_urgent,s1_latency_ms,s2_team,s2_confidence,s2_urgent,s2_latency_ms,s2_parse_error,agree,s1_correct,s2_correct
+"Production server is down, customers cannot log in, revenue impacted",infra,,,,,,,,,,,,
+I was charged twice for my subscription this month,billing,,,,,,,,,,,,
+Do you offer volume discounts for 500 seats?,sales,,,,,,,,,,,,
+hmm,,,,,,,,,,,,,
