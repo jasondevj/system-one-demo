@@ -10,7 +10,7 @@ Companion code for the talk **"The Two-Tier AI Stack - Decision and Reasoning"**
 - `workflows/system2-ticket-triage.json` - System Two comparison: same tickets, same routing rule, but a general LLM via Ollama (port 11434) answers. Needs Ollama with a model pulled - default `gemma4:12b-mlx`, swap it in the **Ollama Generate (System 2)** node. Untested on a live machine yet.
 - `workflows/compare-s1-s2-evaluation.json` - standalone comparison workflow (n8n Evaluations): runs every ticket in a Data Table through BOTH systems in the same run and writes side-by-side results back, scoring each system against ground truth (team pick, urgency call, final route). Leaves the two demo workflows untouched.
 - `datasets/tickets.csv` - the tickets dataset for the comparison workflow (import it into an n8n Data Table).
-- `workflows/system1-ticket-triage-chat.json` - the same S1 triage engine with a chat front (n8n hosted chat): a ticket arrives as a chat message, the decision posts back as the reply. An extra option for the live demo, not a replacement.
+- `workflows/system1-ticket-triage-chat.json` - hosted chat with an S1 intent/maliciousness gate: safe casual messages get a short canned reply, tickets go to S1 triage, and low-confidence ticket triage escalates to S2. An extra demo, not a replacement for the first two workflows.
 - `fallback/` - demo-day insurance: canned ollaya responses, a one-field-switch responder workflow, and a recording shot list. See [Fallback plan](#fallback-plan-if-the-live-demo-dies).
 - `workflows/system1-choice-poc.json` - minimal question + choices proof of concept against the same endpoint.
 - `docker-compose.yml` - slim local n8n stack (just n8n, nothing else).
@@ -58,13 +58,22 @@ Open **System 1 (Laya) Ticket Triage**, hit **Execute workflow**, and watch each
 
 ### 6. (Optional) Demo through the chat front
 
-`workflows/system1-ticket-triage-chat.json` runs the identical ollaya call and routing rules, but the audience watches a chat: a ticket arrives as a chat message, the workflow runs, and the decision (team, confidence, urgency, route, latency) posts back as the reply.
+`workflows/system1-ticket-triage-chat.json` screens the raw chat message with **Laya Chat Gate** before doing any ticket triage. It uses `laya:en` on ollaya, with an `intent` choice (`support_ticket` vs `casual_chat`) and a `malicious` noul score.
 
-1. Import `workflows/system1-ticket-triage-chat.json` and **activate** it - the hosted chat only listens while the workflow is active.
-2. Open http://localhost:5678/webhook/system1-triage-chat/chat in a browser tab (the Chat Trigger node is in hosted-chat mode; the four demo tickets are pre-filled in its opening message).
-3. Paste a ticket, send, and the routing decision appears in the chat a beat later.
+- **Safe casual message:** a short canned conversational reply. No LLM call, no conversation memory. This is a small chat demo, not a general conversational assistant.
+- **Support ticket:** the existing S1 triage call and routing rules. A confident decision gets the same team/confidence/urgency/route/latency reply as before.
+- **Malicious message:** score >= 0.7 gets a polite refusal before triage. Anger, swearing, criticism or frustration about a legitimate support issue are not malicious by themselves; the gate question says so explicitly.
+- **Uncertain ticket triage:** S1 team confidence < 0.6 (`human_review`) calls **Ollama Escalation (System 2)**. The reply says S1 was unsure, shows S1 confidence and triage latency, then S2's team, confidence, urgency, computed route and latency. A failed/malformed S2 response stays `human_review` instead of inventing a decision.
 
-Good on a big screen for "tickets arriving as messages" discussion. The canned fallback works here too: point the same one URL field at the canned responder (see `fallback/README.md`).
+The intent choice needs confidence >= 0.6 to enter ticket triage. An uncertain intent asks for more detail; an invalid/unavailable gate asks the user to retry. Maliciousness takes precedence over intent. These thresholds are demo defaults to test, not a reliable security boundary. Route labels only describe a decision: this workflow does not actually page anyone or create tickets. Casual/refusal replies show gate latency; the existing ticket reply's latency remains the S1 triage call alone, not end-to-end time.
+
+1. Pull the latest repo and import `workflows/system1-ticket-triage-chat.json`. If replacing an older import, deactivate the old chat workflow first, then import the new one and **activate** it. Keep only one active copy for this webhook path. Importing can create a duplicate; an already-imported workflow does not update when you pull.
+2. Open http://localhost:5678/webhook/system1-triage-chat/chat in a browser tab. Hosted chat only listens while the workflow is active.
+3. Try `hello`, then a real ticket such as `I was charged twice for my subscription this month` or `Production server is down, customers cannot log in, revenue impacted`. Check that an angry but legitimate complaint still gets support. Inspect the gate/triage scores in the execution when testing thresholds and escalation.
+
+The gate and confident-ticket paths need only ollaya on port 11435. The low-confidence escalation also needs Ollama on port 11434 with the model named in **Ollama Escalation (System 2)** (default `gemma4:12b-mlx`; change it to a model installed on that machine if needed). The new gate questions and full hosted-chat flow still need a live test on your machine.
+
+The canned responder currently returns only `urgent` and `team`, not the new gate answers. The one-URL canned fallback applies to the original ticket demos, **not this gated chat workflow**.
 
 ## Fresh machine notes
 
