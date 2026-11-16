@@ -1,5 +1,5 @@
-ticket,expected_team,s1_team,s1_confidence,s1_urgent,s1_latency_ms,s2_team,s2_confidence,s2_urgent,s2_latency_ms,s2_parse_error,agree,s1_correct,s2_correct
-"Production server is down, customers cannot log in, revenue impacted",infra,,,,,,,,,,,,
-I was charged twice for my subscription this month,billing,,,,,,,,,,,,
-Do you offer volume discounts for 500 seats?,sales,,,,,,,,,,,,
-hmm,,,,,,,,,,,,,
+ticket,expected_team,expected_urgent,expected_route,s1_team,s1_confidence,s1_urgent,s1_latency_ms,s1_route,s1_team_correct,s1_urgent_correct,s1_route_correct,s2_team,s2_confidence,s2_urgent,s2_latency_ms,s2_route,s2_parse_error,s2_team_correct,s2_urgent_correct,s2_route_correct,agree
+"Production server is down, customers cannot log in, revenue impacted",infra,1,page_oncall:infra,,,,,,,,,,,,,,,,,,
+I was charged twice for my subscription this month,billing,0,queue:billing,,,,,,,,,,,,,,,,,,
+Do you offer volume discounts for 500 seats?,sales,0,queue:sales,,,,,,,,,,,,,,,,,,
+hmm,,0,human_review,,,,,,,,,,,,,,,,,,
