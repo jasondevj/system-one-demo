@@ -16,7 +16,9 @@ Companion code for the talk **"The Two-Tier AI Stack - Decision and Reasoning"**
 - `docker-compose.yml` - slim local n8n stack (just n8n, nothing else).
 - `.env.example` - n8n version pin.
 
-## Quickstart (about 5 minutes)
+## Quickstart (about 5 minutes, plus the one-time model download)
+
+Prerequisites on your machine: **Docker** (Docker Desktop on Mac/Windows), **ollaya** (System 1) and **Ollama** (System 2 and the comparison). Clone this repo first, then:
 
 ### 1. Start n8n
 
@@ -37,13 +39,27 @@ ollaya list
 
 The workflows expect the ollaya daemon reachable on port `11435` (see ollaya.dev for install and model-pull instructions).
 
-### 3. Import the workflows
+### 3. Install Ollama and pull the System 2 model
+
+Only needed for System 2 and the comparison - System 1 runs without it. Install Ollama from https://ollama.com, then pull the model for your platform:
+
+```bash
+# Apple-Silicon Mac (MLX build, the fast option there):
+ollama pull gemma4:12b-mlx
+
+# Windows, Linux or Intel Mac:
+ollama pull gemma4:12b
+```
+
+This is the one heavy download in the whole setup (several GB) - do it on good wifi, not venue wifi. If you pulled the standard `gemma4:12b`, set that model name in the **Ollama Generate (System 2)** node of the System 2 workflow and the **Ollama Generate (S2)** node of the comparison workflow.
+
+### 4. Import the workflows
 
 In n8n: **Workflows -> Import from File**, and pick each JSON from the `workflows/` folder. (The compose file also mounts that folder read-only at `/data/workflows` inside the container.)
 
 The System 1 side POSTs to `http://host.docker.internal:11435/api/decide` (ollaya on your host), the System 2 side to `http://host.docker.internal:11434/api/generate` (Ollama on your host).
 
-### 4. (Optional) Run the S1 vs S2 comparison
+### 5. (Optional) Run the S1 vs S2 comparison
 
 Uses n8n's Evaluations feature - free on self-hosted, but the **Run test** button needs a registered Community edition (free, one minute - see [Fresh machine notes](#fresh-machine-notes)).
 
@@ -52,11 +68,15 @@ Uses n8n's Evaluations feature - free on self-hosted, but the **Run test** butto
 3. With ollaya and Ollama running, open the workflow's **Evaluations** tab and hit **Run test**.
 4. Open the Data Table: each row now has `s1_*` and `s2_*` columns side by side (team, confidence, urgency, computed route, latency in ms), per-row flags scoring both systems against the dataset's ground truth (`expected_team` / `expected_urgent` / `expected_route`), and the `agree` flag between systems. Result columns are text so a CSV-imported table accepts them as-is.
 
-### 5. Run the demos
+The four tickets are synthetic examples with hand-picked ground-truth labels - they demonstrate the evaluation mechanics, they are not a general accuracy benchmark.
+
+### 6. Run the demos
 
 Open **System 1 (Laya) Ticket Triage**, hit **Execute workflow**, and watch each ticket come back with a team pick, confidence, urgency score, output token count, and latency in milliseconds.
 
-### 6. (Optional) Demo through the chat front
+Then run **System 2 (Ollama LLM) Ticket Triage** the same way to compare. The first System 2 run can take a few minutes while Ollama loads the model into memory; later runs are much faster.
+
+### 7. (Optional) Demo through the chat front
 
 `workflows/system1-ticket-triage-chat.json` screens the raw chat message with **Laya Chat Gate** before doing any ticket triage. It uses `laya:en` on ollaya, with an `intent` choice (`support_ticket` vs `casual_chat`) and a `malicious` noul score.
 
@@ -77,7 +97,7 @@ The canned responder currently returns only `urgent` and `team`, not the new gat
 
 ## Fresh machine notes
 
-- **Ollama + the one heavy download.** The System 2 comparison needs Ollama (https://ollama.com) with a model pulled. On an Apple-Silicon Mac: `ollama pull gemma4:12b-mlx` (MLX build, the fast option there). MLX builds only run on Apple Silicon - on Windows, Linux or an Intel Mac use `ollama pull gemma4:12b` instead, then set that model name in the **Ollama Generate (System 2)** node (and in **Ollama Escalation (System 2)** if you use the chat front). This is the only large download in the whole setup (several GB) - pull it on good wifi before the event, not on venue wifi. Everything else (n8n image, ollaya, the workflows) is small. To use a different model, change it in the **Ollama Generate (System 2)** node.
+- **Ollama + the one heavy download.** The System 2 comparison needs Ollama (https://ollama.com) with a model pulled - see step 3 of the Quickstart for the per-platform pull commands. MLX builds only run on Apple Silicon - on Windows, Linux or an Intel Mac the standard `gemma4:12b` is the one to pull, and the model name then needs changing in the **Ollama Generate (System 2)** node, **Ollama Generate (S2)** in the comparison workflow, and **Ollama Escalation (System 2)** if you use the chat front. Everything else (n8n image, ollaya, the workflows) is small.
 - **Evaluations "Run test" needs a registered Community edition.** Still free: **Settings > Usage and plan > Unlock**, enter your email, and activate the key from the email n8n sends. Registration is per instance, but the same Community key can be activated up to 5 times (n8n FAQ), so one email covers several machines. Without it the comparison workflow still imports and runs manually - only the **Run test** button asks.
 - **host.docker.internal.** The workflows reach ollaya and Ollama on your host through `host.docker.internal`. Docker Desktop on Mac and Windows resolves this natively - nothing to configure. On Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` to the n8n service in the compose file (or swap in your host's gateway IP).
 
