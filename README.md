@@ -8,7 +8,7 @@ Companion code for the talk **"The Two-Tier AI Stack - Decision and Reasoning"**
 
 - `workflows/system1-ticket-triage.json` - n8n workflow: four sample support tickets -> ollaya `/api/decide` (urgent? which team?) -> deterministic routing. "Smart-If": the AI perceives, the code decides.
 - `workflows/system2-ticket-triage.json` - System Two comparison: same tickets, same routing rule, but a general LLM via Ollama (port 11434) answers. Needs Ollama with a model pulled - default `gemma4:12b-mlx`, swap it in the **Ollama Generate (System 2)** node. Untested on a live machine yet.
-- `workflows/compare-s1-s2-evaluation.json` - standalone comparison workflow (n8n Evaluations): runs every ticket in a Data Table through BOTH systems in the same run and writes side-by-side results back. Leaves the two demo workflows untouched.
+- `workflows/compare-s1-s2-evaluation.json` - standalone comparison workflow (n8n Evaluations): runs every ticket in a Data Table through BOTH systems in the same run and writes side-by-side results back, scoring each system against ground truth (team pick, urgency call, final route). Leaves the two demo workflows untouched.
 - `datasets/tickets.csv` - the tickets dataset for the comparison workflow (import it into an n8n Data Table).
 - `workflows/system1-ticket-triage-chat.json` - the same S1 triage engine with a chat front (n8n hosted chat): a ticket arrives as a chat message, the decision posts back as the reply. An extra option for the live demo, not a replacement.
 - `fallback/` - demo-day insurance: canned ollaya responses, a one-field-switch responder workflow, and a recording shot list. See [Fallback plan](#fallback-plan-if-the-live-demo-dies).
@@ -50,7 +50,7 @@ Uses n8n's Evaluations feature - free on self-hosted, but the **Run test** butto
 1. In n8n, open **Data tables**, create a table named `tickets`, and import `datasets/tickets.csv` from this repo.
 2. Import `workflows/compare-s1-s2-evaluation.json`, then in BOTH evaluation nodes (**When fetching a dataset row** and **Write Results to Dataset**), select your `tickets` table.
 3. With ollaya and Ollama running, open the workflow's **Evaluations** tab and hit **Run test**.
-4. Open the Data Table: each row now has `s1_*` and `s2_*` columns side by side (team, confidence, urgency, latency in ms), plus `agree` and per-system `correct` flags against `expected_team`. Result columns are text so a CSV-imported table accepts them as-is.
+4. Open the Data Table: each row now has `s1_*` and `s2_*` columns side by side (team, confidence, urgency, computed route, latency in ms), per-row flags scoring both systems against the dataset's ground truth (`expected_team` / `expected_urgent` / `expected_route`), and the `agree` flag between systems. Result columns are text so a CSV-imported table accepts them as-is.
 
 ### 5. Run the demos
 
