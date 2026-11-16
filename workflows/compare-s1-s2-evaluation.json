@@ -44,7 +44,7 @@
         "url": "http://host.docker.internal:11434/api/generate",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: 'gemma4:12b-mlx',\n  stream: false,\n  format: 'json',\n  options: { temperature: 0 },\n  prompt: [\n    'You are a support ticket triage system. Read the ticket and decide:',\n    '1. urgent - probability from 0 to 1 that this ticket is urgent and business-critical.',\n    '2. team - exactly one of \"infra\" (infrastructure outage or technical failure), \"billing\" (billing or payment issue), \"sales\" (sales or pricing inquiry).',\n    '3. confidence - your confidence from 0 to 1 in the team choice.',\n    'Reply with ONLY a JSON object, no explanation, no markdown: {\"urgent\": <number>, \"team\": \"<infra|billing|sales>\", \"confidence\": <number>}',\n    '',\n    'Ticket: ' + $json.ticket\n  ].join('\\n')\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gemma4:12b-mlx',\n  stream: false,\n  format: 'json',\n  options: { temperature: 0 },\n  prompt: [\n    'You are a support ticket triage system. Read the ticket and decide:',\n    '1. urgent - probability from 0 to 1 that this ticket is urgent and business-critical.',\n    '2. team - exactly one of \"infra\" (infrastructure outage or technical failure), \"billing\" (billing or payment issue), \"sales\" (sales or pricing inquiry).',\n    '3. confidence - your confidence from 0 to 1 in the team choice.',\n    'Reply with ONLY a JSON object, no explanation, no markdown: {\"urgent\": <number>, \"team\": \"<infra|billing|sales>\", \"confidence\": <number>}',\n    '',\n    'Ticket: ' + $('When fetching a dataset row').item.json.ticket\n  ].join('\\n')\n}) }}",
         "options": {
           "timeout": 120000
         }
@@ -179,11 +179,6 @@
             "node": "Laya Decide (S1)",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Ollama Generate (S2)",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -203,7 +198,7 @@
       "main": [
         [
           {
-            "node": "Compare & Score",
+            "node": "Ollama Generate (S2)",
             "type": "main",
             "index": 0
           }
