@@ -59,7 +59,7 @@ This is the one heavy download in the whole setup (several GB) - do it on good w
 
 In n8n: **Workflows -> Import from File**, and pick each JSON from the `workflows/` folder. (The compose file also mounts that folder read-only at `/data/workflows` inside the container.)
 
-**Import `s2-config.json` first.** `workflows/s2-config.json` is a tiny workflow named `S2 Config` that holds the System 2 model name (default `gemma4:12b-mlx`). The System 2 triage, the comparison, the chat and the five-questions workflows each call it in a **Get S2 Model** node. To change the model for all of them, edit the value in its **S2 Model Name** node and save; it does not need to be activated. If a **Get S2 Model** node shows an error after import (n8n did not link to the freshly imported workflow), open that node and pick `S2 Config` from the workflow list. If that call fails, the workflows keep working with `gemma4:12b-mlx`, which also means a failed lookup silently ignores your override. Not yet tested live on n8n; check one System 2 run after importing.
+**Import `s2-config.json` first.** `workflows/s2-config.json` is a tiny workflow named `S2 Config` that holds the System 2 model name (default `gemma4:12b-mlx`). The System 2 triage, the comparison, the chat and the five-questions workflows each call it in a **Get S2 Model** node. To change the model for all of them, edit the value in its **S2 Model Name** node and save; it does not need to be activated. If a **Get S2 Model** node shows an error after import (n8n did not link to the freshly imported workflow), open that node and pick `S2 Config` from the workflow list. If that call fails, the workflows keep working with `gemma4:12b-mlx`, which also means a failed lookup silently ignores your override. To check the link, run one System 2 path and open the **Get S2 Model** node's output: it should show the `model` name.
 
 The System 1 side POSTs to `http://host.docker.internal:11435/api/decide` (ollaya on your host), the System 2 side to `http://host.docker.internal:11434/api/generate` (Ollama on your host).
 
@@ -95,7 +95,7 @@ The intent choice needs confidence >= 0.6 to enter ticket triage. An uncertain i
 2. Open http://localhost:5678/webhook/system1-triage-chat/chat in a browser tab. Hosted chat only listens while the workflow is active.
 3. Try `hello`, then a real ticket such as `I was charged twice for my subscription this month` or `Production server is down, customers cannot log in, revenue impacted`. Check that an angry but legitimate complaint still gets support. Inspect the gate/triage scores in the execution when testing thresholds and escalation.
 
-The gate and confident-ticket paths need only ollaya on port 11435. The low-confidence escalation also needs Ollama on port 11434 with the model set in the `S2 Config` workflow (default `gemma4:12b-mlx`, Apple Silicon only; change it there to a model installed on your machine - see [Fresh machine notes](#fresh-machine-notes)). The new gate questions and full hosted-chat flow still need a live test on your machine.
+The gate and confident-ticket paths need only ollaya on port 11435. The low-confidence escalation also needs Ollama on port 11434 with the model set in the `S2 Config` workflow (default `gemma4:12b-mlx`, Apple Silicon only; change it there to a model installed on your machine - see [Fresh machine notes](#fresh-machine-notes)).
 
 The canned responder currently returns only `urgent` and `team`, not the new gate answers. The one-URL canned fallback applies to the original ticket demos, **not this gated chat workflow**.
 
@@ -128,7 +128,7 @@ curl -X POST http://localhost:5678/webhook-test/five-questions \
 
 Needs ollaya on port 11435. System 2 only runs on escalation and needs Ollama on port 11434 with the model set in the `S2 Config` workflow (default `gemma4:12b-mlx`; change it there on non-Apple-Silicon machines - see [Fresh machine notes](#fresh-machine-notes)). The CHOOSE branch reads it through its **Get S2 Model** node.
 
-Status: checked by JSON and code review and by running the code steps against simulated model answers. It still needs a live run against ollaya and Ollama on a real machine; the new gate and action questions in particular are untested against real laya:en answers. The thresholds (0.7 urgent, 0.6 confidence, impact bands) are demo values to test, routes are labels only (nothing is paged, queued or sent), and the gate is a demo guardrail, not a security boundary. S1 can be confidently wrong. Not covered by the canned fallback.
+Notes: the thresholds (0.7 urgent, 0.6 confidence, impact bands) are demo values to tune for your own tickets, routes are labels only (nothing is paged, queued or sent), and the gate is a demo guardrail, not a security boundary. S1 can be confidently wrong, and a confident answer passes the gate. Not covered by the canned fallback.
 
 ## Fresh machine notes
 
