@@ -40,11 +40,30 @@
     },
     {
       "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "s2ConfigDemo",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "b3200000-0000-4000-8000-0000000000a1",
+      "name": "Get S2 Model",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        280,
+        480
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "http://host.docker.internal:11434/api/generate",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: $env.OLLAMA_MODEL || 'gemma4:12b-mlx',\n  stream: false,\n  format: 'json',\n  options: { temperature: 0 },\n  prompt: [\n    'You are a support ticket triage system. Read the ticket and decide:',\n    '1. urgent - probability from 0 to 1 that this ticket is urgent and business-critical.',\n    '2. team - exactly one of \"infra\" (infrastructure outage or technical failure), \"billing\" (billing or payment issue), \"sales\" (sales or pricing inquiry).',\n    '3. confidence - your confidence from 0 to 1 in the team choice.',\n    'Reply with ONLY a JSON object, no explanation, no markdown: {\"urgent\": <number>, \"team\": \"<infra|billing|sales>\", \"confidence\": <number>}',\n    '',\n    'Ticket: ' + $('When fetching a dataset row').item.json.ticket\n  ].join('\\n')\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: $json.model || 'gemma4:12b-mlx',\n  stream: false,\n  format: 'json',\n  options: { temperature: 0 },\n  prompt: [\n    'You are a support ticket triage system. Read the ticket and decide:',\n    '1. urgent - probability from 0 to 1 that this ticket is urgent and business-critical.',\n    '2. team - exactly one of \"infra\" (infrastructure outage or technical failure), \"billing\" (billing or payment issue), \"sales\" (sales or pricing inquiry).',\n    '3. confidence - your confidence from 0 to 1 in the team choice.',\n    'Reply with ONLY a JSON object, no explanation, no markdown: {\"urgent\": <number>, \"team\": \"<infra|billing|sales>\", \"confidence\": <number>}',\n    '',\n    'Ticket: ' + $('When fetching a dataset row').first().json.ticket\n  ].join('\\n')\n}) }}",
         "options": {
           "timeout": 120000
         }
@@ -54,7 +73,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        280,
+        520,
         480
       ]
     },
@@ -67,7 +86,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        560,
+        800,
         480
       ]
     },
@@ -80,7 +99,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        840,
+        1080,
         340
       ]
     },
@@ -174,13 +193,13 @@
       "type": "n8n-nodes-base.evaluation",
       "typeVersion": 4.8,
       "position": [
-        1100,
+        1340,
         340
       ]
     },
     {
       "parameters": {
-        "content": "## SETUP (one time)\n\n1. In n8n: **Data tables** -> create a table named `tickets` and import `datasets/tickets.csv` from this repo.\n2. In BOTH evaluation nodes (**When fetching a dataset row** and **Write Results to Dataset**), select your `tickets` table.\n3. Make sure ollaya (port 11435) and Ollama (port 11434) are running on the host.\n\n## RUN\n\nWorkflow **Evaluations** tab -> **Run test**. Each dataset row runs through BOTH System 1 (ollaya laya:en) and System 2 (Ollama LLM) in the same execution, and the side-by-side columns (team, confidence, urgent, computed route, latency per system) are written back to the table, with per-row flags scoring BOTH systems against the dataset's ground truth (expected_team / expected_urgent / expected_route) on team pick, urgency call and final route, plus the agree flag between systems. Result columns are text so CSV-imported tables accept them.\n\nThe S2 model name uses `$env.OLLAMA_MODEL || 'gemma4:12b-mlx'` in **Ollama Generate (S2)** (set `OLLAMA_MODEL` in `.env` to override).",
+        "content": "## SETUP (one time)\n\n1. In n8n: **Data tables** -> create a table named `tickets` and import `datasets/tickets.csv` from this repo.\n2. In BOTH evaluation nodes (**When fetching a dataset row** and **Write Results to Dataset**), select your `tickets` table.\n3. Make sure ollaya (port 11435) and Ollama (port 11434) are running on the host.\n\n## RUN\n\nWorkflow **Evaluations** tab -> **Run test**. Each dataset row runs through BOTH System 1 (ollaya laya:en) and System 2 (Ollama LLM) in the same execution, and the side-by-side columns (team, confidence, urgent, computed route, latency per system) are written back to the table, with per-row flags scoring BOTH systems against the dataset's ground truth (expected_team / expected_urgent / expected_route) on team pick, urgency call and final route, plus the agree flag between systems. Result columns are text so CSV-imported tables accept them.\n\nThe S2 model name comes from the **S2 Config** workflow (import `workflows/s2-config.json` first) via **Get S2 Model**; edit it there. If that call fails, S2 falls back to `gemma4:12b-mlx`.",
         "height": 420,
         "width": 560,
         "color": 4
@@ -222,7 +241,7 @@
       "main": [
         [
           {
-            "node": "Ollama Generate (S2)",
+            "node": "Get S2 Model",
             "type": "main",
             "index": 0
           }
@@ -245,6 +264,17 @@
         [
           {
             "node": "Write Results to Dataset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get S2 Model": {
+      "main": [
+        [
+          {
+            "node": "Ollama Generate (S2)",
             "type": "main",
             "index": 0
           }
