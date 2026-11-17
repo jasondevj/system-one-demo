@@ -12,6 +12,7 @@ Companion code for the talk **"The Two-Tier AI Stack - Decision and Reasoning"**
 - `datasets/tickets.csv` - the tickets dataset for the comparison workflow (import it into an n8n Data Table).
 - `workflows/system1-ticket-triage-chat.json` - hosted chat with an S1 intent/maliciousness gate: safe casual messages get a short canned reply, tickets go to S1 triage, and low-confidence ticket triage escalates to S2. An extra demo, not a replacement for the first two workflows.
 - `fallback/` - demo-day insurance: canned ollaya responses, a one-field-switch responder workflow, and a recording shot list. See [Fallback plan](#fallback-plan-if-the-live-demo-dies).
+- `workflows/five-questions-demo.json` - the talk slide as one workflow: a webhook takes a ticket and walks CLASSIFY (Laya), ROUTE (code), RANK (confidence), GATE (< 0.6) and CHOOSE (escalate to System 2), with sticky notes naming each step. See [step 8](#8-optional-the-five-questions-workflow).
 - `workflows/system1-choice-poc.json` - minimal question + choices proof of concept against the same endpoint.
 - `docker-compose.yml` - slim local n8n stack (just n8n, nothing else).
 - `.env.example` - n8n version pin.
@@ -94,6 +95,35 @@ The intent choice needs confidence >= 0.6 to enter ticket triage. An uncertain i
 The gate and confident-ticket paths need only ollaya on port 11435. The low-confidence escalation also needs Ollama on port 11434 with the model named in **Ollama Escalation (System 2)** (default `gemma4:12b-mlx`, Apple Silicon only; change it to a model installed on that machine - see [Fresh machine notes](#fresh-machine-notes)). The new gate questions and full hosted-chat flow still need a live test on your machine.
 
 The canned responder currently returns only `urgent` and `team`, not the new gate answers. The one-URL canned fallback applies to the original ticket demos, **not this gated chat workflow**.
+
+### 8. (Optional) The five-questions workflow
+
+`workflows/five-questions-demo.json` is the "All five, in one n8n workflow" slide as a single pipeline. One ticket goes in through a webhook; sticky notes on the canvas name each step with the slide's words:
+
+1. **CLASSIFY** - one Laya (`laya:en`) call on ollaya: urgent? which team? with confidence.
+2. **ROUTE** - plain code, not the model: urgent >= 0.7 pages on-call, otherwise the team queue.
+3. **RANK** - every answer carries its confidence and a band (high >= 0.8, medium >= 0.6, low). Optionally send `expected_team` and the reply marks the team pick right or wrong. This is a compact score for one ticket, not the Data Table evaluation in step 5.
+4. **GATE** - confidence < 0.6 means System 1 does not decide.
+5. **CHOOSE** - those low-confidence tickets escalate to System 2 (Ollama, default `gemma4:12b-mlx`). If System 2 is also below 0.6, or fails to answer, the verdict is `human_review`.
+
+Run it:
+
+1. Import `workflows/five-questions-demo.json` (Workflows -> Import from File). Re-importing creates a duplicate; an already-imported workflow does not update when you pull.
+2. Either click **Execute workflow** (it then waits for one call on the test URL), or **activate** it to use the production URL.
+3. Send a ticket from a terminal:
+
+```
+curl -X POST http://localhost:5678/webhook-test/five-questions \
+  -H 'Content-Type: application/json' \
+  -d '{"ticket": "Production server is down, customers cannot log in, revenue impacted", "expected_team": "infra"}'
+```
+
+   Use `/webhook/five-questions` instead of `/webhook-test/five-questions` when the workflow is active. Leave out `ticket` to use the double-charge example.
+4. The JSON reply has `final_route`, `decided_by`, a `stages` object with the output of each of the five steps, per-stage latency, and `total_ms`. A vague ticket such as `hmm` is the one most likely to fall under 0.6 and show the escalation.
+
+Needs ollaya on port 11435. The CHOOSE step only runs on escalation and needs Ollama on port 11434 with the model named in **Choose: Ollama (System 2)**; change that name on non-Apple-Silicon machines (see [Fresh machine notes](#fresh-machine-notes)).
+
+Status: checked by JSON and code review and by running the code steps against simulated model answers. It still needs a live run against ollaya and Ollama on a real machine. The thresholds (0.7 urgent, 0.6 gate, 0.8 band) are demo values to test, routes are labels only (nothing is paged or queued), and the gate is a demo guardrail, not a security boundary. S1 can be confidently wrong: a confident answer passes the gate. Not covered by the canned fallback.
 
 ## Fresh machine notes
 
