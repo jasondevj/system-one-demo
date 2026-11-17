@@ -12,7 +12,7 @@ Companion code for the talk **"The Two-Tier AI Stack - Decision and Reasoning"**
 - `datasets/tickets.csv` - the tickets dataset for the comparison workflow (import it into an n8n Data Table).
 - `workflows/system1-ticket-triage-chat.json` - hosted chat with an S1 intent/maliciousness gate: safe casual messages get a short canned reply, tickets go to S1 triage, and low-confidence ticket triage escalates to S2. An extra demo, not a replacement for the first two workflows.
 - `fallback/` - demo-day insurance: canned ollaya responses, a one-field-switch responder workflow, and a recording shot list. See [Fallback plan](#fallback-plan-if-the-live-demo-dies).
-- `workflows/five-questions-demo.json` - the talk slide as one workflow: a webhook takes a ticket and walks CLASSIFY (Laya), ROUTE (code), RANK (confidence), GATE (< 0.6) and CHOOSE (escalate to System 2), with sticky notes naming each step. See [step 8](#8-optional-the-five-questions-workflow).
+- `workflows/five-questions-demo.json` - the talk slide as one workflow: a webhook takes a ticket and System 1 (Laya) decides at each of CLASSIFY, ROUTE, RANK, GATE and CHOOSE in a different way (choice and noul calls), with code applying policy and an escalation to System 2. Sticky notes name each step. See [step 8](#8-optional-the-five-questions-workflow).
 - `workflows/system1-choice-poc.json` - minimal question + choices proof of concept against the same endpoint.
 - `docker-compose.yml` - slim local n8n stack (just n8n, nothing else).
 - `.env.example` - n8n version pin.
@@ -98,17 +98,19 @@ The canned responder currently returns only `urgent` and `team`, not the new gat
 
 ### 8. (Optional) The five-questions workflow
 
-`workflows/five-questions-demo.json` is the "All five, in one n8n workflow" slide as a single pipeline. One ticket goes in through a webhook; sticky notes on the canvas name each step with the slide's words:
+`workflows/five-questions-demo.json` is the "All five, in one n8n workflow" slide as a single pipeline. One ticket goes in through a webhook. System 1 (Laya, `laya:en` on ollaya) decides at every stage, in a different way, and sticky notes on the canvas name each step with the slide's words. Plain code only applies policy to what the model decided.
 
-1. **CLASSIFY** - one Laya (`laya:en`) call on ollaya: urgent? which team? with confidence.
-2. **ROUTE** - plain code, not the model: urgent >= 0.7 pages on-call, otherwise the team queue.
-3. **RANK** - every answer carries its confidence and a band (high >= 0.8, medium >= 0.6, low). Optionally send `expected_team` and the reply marks the team pick right or wrong. This is a compact score for one ticket, not the Data Table evaluation in step 5.
-4. **GATE** - confidence < 0.6 means System 1 does not decide.
-5. **CHOOSE** - those low-confidence tickets escalate to System 2 (Ollama, default `gemma4:12b-mlx`). If System 2 is also below 0.6, or fails to answer, the verdict is `human_review`.
+1. **CLASSIFY** - a System 1 *choice* call picks the team (infra, billing or sales) with a confidence.
+2. **ROUTE** - a System 1 *noul* call scores urgency from 0 to 1. Then plain code routes: >= 0.7 pages on-call, otherwise the team queue. Once the model decides, routing is just code.
+3. **RANK** - a System 1 *noul* call scores business impact. The score becomes a priority: P1 >= 0.8, P2 >= 0.5, otherwise P3. Optionally send `expected_team` and the reply marks the CLASSIFY pick right or wrong. This is a compact score for one ticket, not the Data Table evaluation in step 5.
+4. **GATE** - a System 1 *choice* call decides: automate, or a human must handle it (legal threat, security incident, large refund, very upset customer). A human verdict stops the run at `human_review`. An unusable answer fails safe to human.
+5. **CHOOSE** - a System 1 *choice* call picks the action: resolve with a help article, hand to the team, or escalate to System 2. Code policy on top: an urgent ticket is never auto-answered, and a CLASSIFY confidence under 0.6 always escalates. Escalation calls System 2 (Ollama, default `gemma4:12b-mlx`). If System 2 is also under 0.6 or fails to answer, the verdict is `human_review`.
+
+A normal ticket makes five System 1 calls in a row (each roughly 0.5 s on the demo Mac) and System 2 only when escalated.
 
 Run it:
 
-1. Import `workflows/five-questions-demo.json` (Workflows -> Import from File). Re-importing creates a duplicate; an already-imported workflow does not update when you pull.
+1. Import `workflows/five-questions-demo.json` (Workflows -> Import from File). If you imported an earlier version, delete or deactivate it first: re-importing creates a duplicate, and an already-imported workflow does not update when you pull.
 2. Either click **Execute workflow** (it then waits for one call on the test URL), or **activate** it to use the production URL.
 3. Send a ticket from a terminal:
 
@@ -119,11 +121,11 @@ curl -X POST http://localhost:5678/webhook-test/five-questions \
 ```
 
    Use `/webhook/five-questions` instead of `/webhook-test/five-questions` when the workflow is active. Leave out `ticket` to use the double-charge example.
-4. The JSON reply has `final_route`, `decided_by`, a `stages` object with the output of each of the five steps, per-stage latency, and `total_ms`. A vague ticket such as `hmm` is the one most likely to fall under 0.6 and show the escalation.
+4. The JSON reply has `final_route`, `decided_by`, a `stages` object with the output of each of the five steps (which call type, the scores, that call's latency), `laya_calls`, `laya_total_ms` and `total_ms`. Try a few tickets: an outage (pages on-call), a pricing question (may get a help-article reply), a threat or security-style complaint (the gate sends it to a human), and a vague `hmm` (CLASSIFY confidence is likely under 0.6, so it escalates to System 2).
 
-Needs ollaya on port 11435. The CHOOSE step only runs on escalation and needs Ollama on port 11434 with the model named in **Choose: Ollama (System 2)**; change that name on non-Apple-Silicon machines (see [Fresh machine notes](#fresh-machine-notes)).
+Needs ollaya on port 11435. System 2 only runs on escalation and needs Ollama on port 11434 with the model named in **Choose: Ollama (System 2)**; change that name on non-Apple-Silicon machines (see [Fresh machine notes](#fresh-machine-notes)).
 
-Status: checked by JSON and code review and by running the code steps against simulated model answers. It still needs a live run against ollaya and Ollama on a real machine. The thresholds (0.7 urgent, 0.6 gate, 0.8 band) are demo values to test, routes are labels only (nothing is paged or queued), and the gate is a demo guardrail, not a security boundary. S1 can be confidently wrong: a confident answer passes the gate. Not covered by the canned fallback.
+Status: checked by JSON and code review and by running the code steps against simulated model answers. It still needs a live run against ollaya and Ollama on a real machine; the new gate and action questions in particular are untested against real laya:en answers. The thresholds (0.7 urgent, 0.6 confidence, impact bands) are demo values to test, routes are labels only (nothing is paged, queued or sent), and the gate is a demo guardrail, not a security boundary. S1 can be confidently wrong. Not covered by the canned fallback.
 
 ## Fresh machine notes
 
