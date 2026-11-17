@@ -1,0 +1,75 @@
+{
+  "id": "s2ConfigDemo",
+  "name": "S2 Config",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "b4000000-0000-4000-8000-000000000001",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b4000000-0000-4000-8000-0000000000f1",
+              "name": "model",
+              "value": "gemma4:12b-mlx",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b4000000-0000-4000-8000-000000000002",
+      "name": "S2 Model Name",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## S2 CONFIG: the one place to set the System 2 model\n\nEvery System 2 workflow (system2 triage, S1 vs S2 comparison, chat escalation, five-questions CHOOSE) calls this workflow in a **Get S2 Model** node and uses the `model` it returns.\n\nTo use a different Ollama model, change the `model` value in **S2 Model Name** (run `ollama list` to see what is installed). Default: `gemma4:12b-mlx` (Apple Silicon). Elsewhere try `gemma4:12b`.\n\nImport this workflow FIRST. If the callers cannot find it (their Get S2 Model node shows an error), open that node and pick **S2 Config** from the workflow list. Callers fall back to `gemma4:12b-mlx` if the call fails, so a failed lookup quietly ignores your override. Does not need to be activated.",
+        "height": 340,
+        "width": 520,
+        "color": 4
+      },
+      "id": "b4000000-0000-4000-8000-000000000003",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -420
+      ]
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "S2 Model Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
