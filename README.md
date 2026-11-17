@@ -7,7 +7,7 @@ Companion code for the talk **"The Two-Tier AI Stack - Decision and Reasoning"**
 ## What's here
 
 - `workflows/system1-ticket-triage.json` - n8n workflow: four sample support tickets -> ollaya `/api/decide` (urgent? which team?) -> deterministic routing. "Smart-If": the AI perceives, the code decides.
-- `workflows/system2-ticket-triage.json` - System Two comparison: same tickets, same routing rule, but a general LLM via Ollama (port 11434) answers. Needs Ollama with a model pulled - default `gemma4:12b-mlx` (Apple Silicon only; see [Fresh machine notes](#fresh-machine-notes) for other platforms), swap it in the **Ollama Generate (System 2)** node. Runs live on the demo Mac with `gemma4:12b-mlx`; a fresh machine still needs the per-platform model pull in [Fresh machine notes](#fresh-machine-notes).
+- `workflows/system2-ticket-triage.json` - System Two comparison: same tickets, same routing rule, but a general LLM via Ollama (port 11434) answers. Needs Ollama with a model pulled - default `gemma4:12b-mlx` (Apple Silicon only; see [Fresh machine notes](#fresh-machine-notes) for other platforms), override it via `OLLAMA_MODEL` in `.env` (or in the **Ollama Generate (System 2)** node). Runs live on the demo Mac with `gemma4:12b-mlx`; a fresh machine still needs a model in Ollama (see [Fresh machine notes](#fresh-machine-notes)).
 - `workflows/compare-s1-s2-evaluation.json` - standalone comparison workflow (n8n Evaluations): runs every ticket in a Data Table through BOTH systems in the same run and writes side-by-side results back, scoring each system against ground truth (team pick, urgency call, final route). Leaves the two demo workflows untouched.
 - `datasets/tickets.csv` - the tickets dataset for the comparison workflow (import it into an n8n Data Table).
 - `workflows/system1-ticket-triage-chat.json` - hosted chat with an S1 intent/maliciousness gate: safe casual messages get a short canned reply, tickets go to S1 triage, and low-confidence ticket triage escalates to S2. An extra demo, not a replacement for the first two workflows.
@@ -15,7 +15,7 @@ Companion code for the talk **"The Two-Tier AI Stack - Decision and Reasoning"**
 - `workflows/five-questions-demo.json` - the talk slide as one workflow: a webhook takes a ticket and System 1 (Laya) decides at each of CLASSIFY, ROUTE, RANK, GATE and CHOOSE in a different way (choice and noul calls), with code applying policy and an escalation to System 2. Sticky notes name each step. See [step 8](#8-optional-the-five-questions-workflow).
 - `workflows/system1-choice-poc.json` - minimal question + choices proof of concept against the same endpoint.
 - `docker-compose.yml` - slim local n8n stack (just n8n, nothing else).
-- `.env.example` - n8n version pin.
+- `.env.example` - n8n version pin and optional `OLLAMA_MODEL` override.
 
 ## Quickstart (about 5 minutes, plus the one-time model download)
 
@@ -52,7 +52,7 @@ ollama pull gemma4:12b-mlx
 ollama pull gemma4:12b
 ```
 
-This is the one heavy download in the whole setup (several GB) - do it on good wifi, not venue wifi. If you pulled the standard `gemma4:12b`, set that model name in the **Ollama Generate (System 2)** node of the System 2 workflow and the **Ollama Generate (S2)** node of the comparison workflow.
+This is the one heavy download in the whole setup (several GB) - do it on good wifi, not venue wifi. If you pulled `gemma4:12b` or want to use an existing local model (e.g. `mistral:7b` or `llama3.2:latest`), set `OLLAMA_MODEL=<model>` in `.env` and run `docker compose up -d`. All System 2 workflows read `$env.OLLAMA_MODEL` and fall back to `gemma4:12b-mlx` when unset.
 
 ### 4. Import the workflows
 
@@ -92,7 +92,7 @@ The intent choice needs confidence >= 0.6 to enter ticket triage. An uncertain i
 2. Open http://localhost:5678/webhook/system1-triage-chat/chat in a browser tab. Hosted chat only listens while the workflow is active.
 3. Try `hello`, then a real ticket such as `I was charged twice for my subscription this month` or `Production server is down, customers cannot log in, revenue impacted`. Check that an angry but legitimate complaint still gets support. Inspect the gate/triage scores in the execution when testing thresholds and escalation.
 
-The gate and confident-ticket paths need only ollaya on port 11435. The low-confidence escalation also needs Ollama on port 11434 with the model named in **Ollama Escalation (System 2)** (default `gemma4:12b-mlx`, Apple Silicon only; change it to a model installed on that machine - see [Fresh machine notes](#fresh-machine-notes)). The new gate questions and full hosted-chat flow still need a live test on your machine.
+The gate and confident-ticket paths need only ollaya on port 11435. The low-confidence escalation also needs Ollama on port 11434 with the model configured via `OLLAMA_MODEL` in `.env` (default `gemma4:12b-mlx`, Apple Silicon only; set `OLLAMA_MODEL` in `.env` to a model installed on your machine - see [Fresh machine notes](#fresh-machine-notes)). The new gate questions and full hosted-chat flow still need a live test on your machine.
 
 The canned responder currently returns only `urgent` and `team`, not the new gate answers. The one-URL canned fallback applies to the original ticket demos, **not this gated chat workflow**.
 
@@ -123,13 +123,13 @@ curl -X POST http://localhost:5678/webhook-test/five-questions \
    Use `/webhook/five-questions` instead of `/webhook-test/five-questions` when the workflow is active. Leave out `ticket` to use the double-charge example.
 4. The JSON reply has `final_route`, `decided_by`, a `stages` object with the output of each of the five steps (which call type, the scores, that call's latency), `laya_calls`, `laya_total_ms` and `total_ms`. Try a few tickets: an outage (pages on-call), a pricing question (may get a help-article reply), a threat or security-style complaint (the gate sends it to a human), and a vague `hmm` (CLASSIFY confidence is likely under 0.6, so it escalates to System 2).
 
-Needs ollaya on port 11435. System 2 only runs on escalation and needs Ollama on port 11434 with the model named in **Choose: Ollama (System 2)**; change that name on non-Apple-Silicon machines (see [Fresh machine notes](#fresh-machine-notes)).
+Needs ollaya on port 11435. System 2 only runs on escalation and needs Ollama on port 11434 with the model configured via `OLLAMA_MODEL` in `.env` (default `gemma4:12b-mlx`; set `OLLAMA_MODEL` on non-Apple-Silicon machines - see [Fresh machine notes](#fresh-machine-notes)).
 
 Status: checked by JSON and code review and by running the code steps against simulated model answers. It still needs a live run against ollaya and Ollama on a real machine; the new gate and action questions in particular are untested against real laya:en answers. The thresholds (0.7 urgent, 0.6 confidence, impact bands) are demo values to test, routes are labels only (nothing is paged, queued or sent), and the gate is a demo guardrail, not a security boundary. S1 can be confidently wrong. Not covered by the canned fallback.
 
 ## Fresh machine notes
 
-- **Ollama + the one heavy download.** The System 2 comparison needs Ollama (https://ollama.com) with a model pulled - see step 3 of the Quickstart for the per-platform pull commands. MLX builds only run on Apple Silicon - on Windows, Linux or an Intel Mac the standard `gemma4:12b` is the one to pull, and the model name then needs changing in the **Ollama Generate (System 2)** node, **Ollama Generate (S2)** in the comparison workflow, and **Ollama Escalation (System 2)** if you use the chat front. Everything else (n8n image, ollaya, the workflows) is small.
+- **Ollama + the one heavy download.** The System 2 comparison needs Ollama (https://ollama.com) with a model pulled - see step 3 of the Quickstart for the per-platform pull commands. MLX builds only run on Apple Silicon - on Windows, Linux or an Intel Mac pull the standard `gemma4:12b` (or use an existing local model from `ollama list`, such as `mistral:7b`), set `OLLAMA_MODEL=<model>` in `.env`, and run `docker compose up -d`. All four System 2 workflows use `$env.OLLAMA_MODEL || 'gemma4:12b-mlx'` so no workflow JSON edits are required. Everything else (n8n image, ollaya, the workflows) is small.
 - **Evaluations "Run test" needs a registered Community edition.** Still free: **Settings > Usage and plan > Unlock**, enter your email, and activate the key from the email n8n sends. Registration is per instance, but the same Community key can be activated up to 5 times (n8n FAQ), so one email covers several machines. Without it the comparison workflow still imports and runs manually - only the **Run test** button asks.
 - **host.docker.internal.** The workflows reach ollaya and Ollama on your host through `host.docker.internal`. Docker Desktop on Mac and Windows resolves this natively - nothing to configure. On Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` to the n8n service in the compose file (or swap in your host's gateway IP).
 
