@@ -57,7 +57,19 @@ This is the one heavy download in the whole setup (several GB) - do it on good w
 
 ### 4. Import the workflows
 
-In n8n: **Workflows -> Import from File**, and pick each JSON from the `workflows/` folder. (The compose file also mounts that folder read-only at `/data/workflows` inside the container.)
+In n8n: **Workflows -> Import from File**, and pick each JSON from the `workflows/` folder.
+
+Or bulk-import all workflows at once from the terminal (since `docker-compose.yml` mounts `./workflows` at `/data/workflows` inside the container):
+
+```bash
+# Import all workflows (or reload after git pull):
+docker exec system-one-demo-n8n n8n import:workflow --separate --input=/data/workflows
+
+# Or reload a single workflow file:
+docker exec system-one-demo-n8n n8n import:workflow --input=/data/workflows/five-questions-demo.json
+```
+
+> **Note on reloading:** All 7 workflow JSON files have fixed `id` fields, so running `n8n import:workflow` via the CLI updates existing workflows **in-place** without creating duplicates. (In the n8n web UI, **Import from File** into a new blank canvas still creates a duplicate copy.)
 
 **Import `s2-config.json` first.** `workflows/s2-config.json` is a tiny workflow named `S2 Config` that holds the System 2 model name (default `gemma4:12b-mlx`). The System 2 triage, the comparison, the chat and the five-questions workflows each call it in a **Get S2 Model** node. To change the model for all of them, edit the value in its **S2 Model Name** node and save; it does not need to be activated. n8n keeps the workflow id on import, so the callers find it. If a **Get S2 Model** node ever shows an error, open that node and pick `S2 Config` from the workflow list. If the call fails, the workflows keep working with `gemma4:12b-mlx` (and ignore your override). To check the link, run one System 2 path and open the **Get S2 Model** node's output: it should show the `model` name.
 
