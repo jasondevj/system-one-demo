@@ -86,6 +86,8 @@ Uses n8n's Evaluations feature - free on self-hosted, but the **Run test** butto
 
 The four tickets are synthetic examples with hand-picked ground-truth labels - they demonstrate the evaluation mechanics, they are not a general accuracy benchmark.
 
+**Evaluations tab notes.** After any re-import of the comparison workflow, pick the `tickets` table again in BOTH evaluation nodes (**When fetching a dataset row** and **Write Results to Dataset**): the table id belongs to your n8n instance, so it can't ship in the JSON. The Evaluations tab shows its setup wizard until the first test run is recorded on that copy of the workflow, so run the test once and then keep that copy in place; deleting or re-importing it resets the table selection and the run list. Do this before demo day.
+
 ### 6. Run the demos
 
 Open **System 1 (Laya) Ticket Triage**, hit **Execute workflow**, and watch each ticket come back with a team pick, confidence, urgency score, output token count, and latency in milliseconds.
