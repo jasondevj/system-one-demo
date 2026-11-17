@@ -94,7 +94,7 @@
     },
     {
       "parameters": {
-        "content": "## MODEL SWAP HERE\n\nThe model name comes from the **S2 Config** workflow (import `workflows/s2-config.json` first), via the **Get S2 Model** node. Edit the model name there, once, for all System 2 workflows. If that call fails, this node falls back to `gemma4:12b-mlx`.\n\nRun `ollama list` to see which models you have installed.\n\nRequires Ollama running on the host (port 11434). UNTESTED end-to-end - validate before the talk.",
+        "content": "## MODEL SWAP HERE\n\nThe model name comes from the **S2 Config** workflow (import `workflows/s2-config.json` first), via the **Get S2 Model** node. Edit the model name there, once, for all System 2 workflows. If that call fails, this node falls back to `gemma4:12b-mlx`.\n\nRun `ollama list` to see which models you have installed.\n\nRequires Ollama running on the host (port 11434).",
         "height": 300,
         "width": 420,
         "color": 4
