@@ -42,11 +42,17 @@ Expect: CLASSIFY confidence about 0.28, so CHOOSE escalates (`policy_overrides` 
 
 ### 4. Chat demo (last)
 
-Open http://localhost:5678/webhook/system1-triage-chat/chat (workflow active).
+Open http://localhost:5678/webhook/system1-triage-chat/chat (workflow active). Use these exact messages: the chat gate wants a ticket-shaped message, and a bare ticket gets "Could you tell me a little more?".
 
-1. Type `hello` - a short canned reply, no triage.
-2. Type the Tuesday ticket: `Every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine.`
-   Expect: System 1 is unsure (confidence under 0.6), the reply shows that and then System 2's answer. This one also waits on gemma, so keep it warm.
+1. `hello` - a short canned reply, no triage.
+2. System 1 handles it:
+   `Hi, I need help with an infrastructure issue: every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine.`
+   Expect: gate pass, routed `queue:infra` at about 0.95 confidence, in roughly 50 to 100 ms.
+3. Escalation to System 2:
+   `Hi, we're a 500-seat enterprise and I need help: your export fails every Tuesday, we were charged twice this month, and we need volume discount pricing. Can someone own all of this?`
+   Expect: gate pass, System 1 team confidence about 0.37, the reply says "System 1 was unsure, so I asked System 2", then System 2 answers billing 0.80, urgent 0.90, `page_oncall:billing`. It takes about 100 s.
+
+Caution: the System 2 chat reply waits on gemma. Keep it warm (see the warmup section); a cold gemma risks the 120 s node timeout.
 
 ## If something breaks
 
