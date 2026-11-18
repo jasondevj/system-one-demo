@@ -14,7 +14,7 @@ A checklist, not documentation. Setup details live in the [README](README.md).
 
 Both models pay a cold-start tax. Fire one throwaway call at each, then keep them warm.
 
-1. **System 1 warmup** - run the pricing command below once.
+1. **System 1 warmup** - run the step 2 command below once.
 2. **System 2 warmup** - run the enterprise command below once and wait for it to finish. A cold gemma can take two minutes or more (the node timeout is 300 s); if the reply says `human_review`, run it again. Do not go on stage until it returns a System 2 answer.
 3. gemma is dropped from memory after a few idle minutes. If you wait longer than that, repeat step 2.
 
@@ -24,13 +24,15 @@ Both models pay a cold-start tax. Fire one throwaway call at each, then keep the
 
 Run `system1-ticket-triage` from the canvas on the four tickets. Instant answers set the baseline: System 1 gets 4/4 right in well under a second per ticket.
 
-### 2. Five questions - pricing ticket (System 1 alone)
+### 2. Five questions - Tuesday ticket (System 1 alone)
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5678/webhook/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"Do you offer volume discounts for 500 seats?"}' | ConvertTo-Json -Depth 6
+Invoke-RestMethod -Uri http://localhost:5678/webhook/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"Every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine."}' | ConvertTo-Json -Depth 6
 ```
 
-Expect: all five stages (classify, route, rank, gate, choose), `decided_by` = System 1 (Laya), about 150 ms in total. Say: "five decisions, five different call types, and the code only applies the rules."
+Expect (verified on the Mac): all five stages (classify, route, rank, gate, choose), `final_route` = `queue:infra`, `decided_by` = System 1 (Laya), policy in code, about 150 ms in total (classify confidence about 0.78, action `hand_to_team`). Say: "five decisions from two kinds of System 1 call (choice and noul), and the code only applies the rules."
+
+Do not use the outage ticket ("Production server is down... revenue impacted") or `hmm` for this step: on the Mac both stopped at the gate and went to `human_review` after four calls. That is a fine side demo of "knowing when not to automate", but it never reaches CHOOSE.
 
 ### 3. Five questions - enterprise ticket (escalates to System 2)
 
