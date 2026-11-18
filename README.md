@@ -140,6 +140,20 @@ curl -X POST http://localhost:5678/webhook-test/five-questions \
    Use `/webhook/five-questions` instead of `/webhook-test/five-questions` when the workflow is active. Leave out `ticket` to use the double-charge example.
 4. The JSON reply has `final_route`, `decided_by`, a `stages` object with the output of each of the five steps (which call type, the scores, that call's latency), `laya_calls`, `laya_total_ms` and `total_ms`. Try a few tickets: an outage (pages on-call), a pricing question (may get a help-article reply), a threat or security-style complaint (the gate sends it to a human), and a vague `hmm` (CLASSIFY confidence is likely under 0.6, so it escalates to System 2).
 
+**Two PowerShell commands, one per path** (pwsh; use `/webhook/` instead of `/webhook-test/` once the workflow is active):
+
+```powershell
+# Path 1 - System 1 decides alone (outage: classified infra, paged on-call)
+Invoke-RestMethod -Method Post -Uri http://localhost:5678/webhook-test/five-questions -ContentType 'application/json' `
+  -Body '{"ticket": "Production server is down, customers cannot log in, revenue impacted", "expected_team": "infra"}' | ConvertTo-Json -Depth 6
+
+# Path 2 - System 1 escalates to System 2 (a vague ticket; CLASSIFY confidence is likely under 0.6)
+Invoke-RestMethod -Method Post -Uri http://localhost:5678/webhook-test/five-questions -ContentType 'application/json' `
+  -Body '{"ticket": "hmm"}' | ConvertTo-Json -Depth 6
+```
+
+Compare `decided_by` and `laya_total_ms` in the two replies: path 1 says System 1 (Laya), path 2 says System 2 (Ollama) and takes seconds longer.
+
 Needs ollaya on port 11435. System 2 only runs on escalation and needs Ollama on port 11434 with the model set in the `S2 Config` workflow (default `gemma4:12b-mlx`; change it there on non-Apple-Silicon machines - see [Fresh machine notes](#fresh-machine-notes)). The CHOOSE branch reads it through its **Get S2 Model** node.
 
 Notes: the thresholds (0.7 urgent, 0.6 confidence, impact bands) are demo values to tune for your own tickets, routes are labels only (nothing is paged, queued or sent), and the gate is a demo guardrail, not a security boundary. S1 can be confidently wrong, and a confident answer passes the gate. Not covered by the canned fallback.
