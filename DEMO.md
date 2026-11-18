@@ -15,7 +15,7 @@ A checklist, not documentation. Setup details live in the [README](README.md).
 Both models pay a cold-start tax. Fire one throwaway call at each, then keep them warm.
 
 1. **System 1 warmup** - run the pricing command below once.
-2. **System 2 warmup** - run the enterprise command below once and wait for it to finish. A cold gemma can take longer than the 120 s node timeout; if the reply says `human_review`, run it again. Do not go on stage until it returns a System 2 answer.
+2. **System 2 warmup** - run the enterprise command below once and wait for it to finish. A cold gemma can take two minutes or more (the node timeout is 300 s); if the reply says `human_review`, run it again. Do not go on stage until it returns a System 2 answer.
 3. gemma is dropped from memory after a few idle minutes. If you wait longer than that, repeat step 2.
 
 ## Live run order
@@ -52,7 +52,7 @@ Open http://localhost:5678/webhook/system1-triage-chat/chat (workflow active). U
    `Hi, we're a 500-seat enterprise and I need help: your export fails every Tuesday, we were charged twice this month, and we need volume discount pricing. Can someone own all of this?`
    Expect: gate pass, System 1 team confidence about 0.37, the reply says "System 1 was unsure, so I asked System 2", then System 2 answers billing 0.80, urgent 0.90, `page_oncall:billing`. It takes about 100 s.
 
-Caution: the System 2 chat reply waits on gemma. Keep it warm (see the warmup section); a cold gemma risks the 120 s node timeout.
+Caution: the System 2 chat reply waits on gemma. Keep it warm (see the warmup section); a cold gemma can take two minutes or more (the node timeout is 300 s).
 
 ## If something breaks
 
