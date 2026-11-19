@@ -88,11 +88,7 @@
     },
     {
       "parameters": {
-        "model": {
-          "__rl": true,
-          "mode": "id",
-          "value": "={{ $('S2 Config').first().json.model }}"
-        },
+        "model": "={{ $('S2 Config').first().json.model }}",
         "options": {
           "temperature": 0,
           "format": "json"
