@@ -222,25 +222,27 @@ Run it:
 ```
 curl -X POST http://localhost:5678/webhook-test/five-questions \
   -H 'Content-Type: application/json' \
-  -d '{"ticket": "Production server is down, customers cannot log in, revenue impacted", "expected_team": "infra"}'
+  -d '{"ticket":"Every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine."}'
 ```
 
    Use `/webhook/five-questions` instead of `/webhook-test/five-questions` when the workflow is active. Leave out `ticket` to use the double-charge example.
-4. The JSON reply has `final_route`, `decided_by`, a `stages` object with the output of each of the five steps (which call type, the scores, that call's latency), `laya_calls`, `laya_total_ms` and `total_ms`. Try a few tickets: an outage (pages on-call), a pricing question (may get a help-article reply), a threat or security-style complaint (the gate sends it to a human), and a vague `hmm` (CLASSIFY confidence is likely under 0.6, so it escalates to System 2).
+4. The JSON reply has `final_route`, `decided_by`, a `stages` object with each step's output, `laya_calls`, `laya_total_ms` and `total_ms`. There are three terminal verdict nodes: **System 1 decided**, **human via gate**, and **System 2 answered**. The last can still return `human_review` if System 2 is unsure or unavailable. Help-article and team-handoff actions share the System 1 terminal.
 
-**Two PowerShell commands, one per path** (pwsh; use `/webhook/` instead of `/webhook-test/` once the workflow is active):
+**PowerShell examples** (pwsh): click **Listen for test event** again before each `/webhook-test/` request. Use `/webhook/` instead when the workflow is active.
 
 ```powershell
-# Path 1 - System 1 decides alone (outage: classified infra, paged on-call)
-Invoke-RestMethod -Method Post -Uri http://localhost:5678/webhook-test/five-questions -ContentType 'application/json' `
-  -Body '{"ticket": "Production server is down, customers cannot log in, revenue impacted", "expected_team": "infra"}' | ConvertTo-Json -Depth 6
+# System 1 alone: Tuesday ticket, documented in DEMO.md
+Invoke-RestMethod -Uri http://localhost:5678/webhook-test/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"Every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine."}' | ConvertTo-Json -Depth 6
 
-# Path 2 - System 1 escalates to System 2 (a vague ticket; CLASSIFY confidence is likely under 0.6)
-Invoke-RestMethod -Method Post -Uri http://localhost:5678/webhook-test/five-questions -ContentType 'application/json' `
-  -Body '{"ticket": "hmm"}' | ConvertTo-Json -Depth 6
+# System 1 escalates to System 2: enterprise ticket
+Invoke-RestMethod -Uri http://localhost:5678/webhook-test/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"We are a 500-seat enterprise: your export fails every Tuesday, we were charged twice this month, and we need volume discount pricing. Can someone own all of this?"}' | ConvertTo-Json -Depth 6
 ```
 
-Compare `decided_by` and `laya_total_ms` in the two replies: path 1 says System 1 (Laya), path 2 says System 2 (Ollama) and takes seconds longer.
+- Tuesday: the runbook records `queue:infra`, `decided_by` = `System 1 (Laya), policy in code`, with five Laya calls. Confirm the current response rather than assuming that outcome.
+- Enterprise: the Mac rehearsal reached System 2 with a usable answer. In that run, low CLASSIFY confidence overrode CHOOSE's `hand_to_team` model pick and caused escalation. Future outputs still depend on the models and configuration; escalation alone does not guarantee a usable System 2 answer.
+- Outage and `hmm`: both were observed reaching `human_review` on the Mac. They are not reliable examples of S1-only routing or S2 escalation. GATE runs before CHOOSE and can stop either ticket, even when CLASSIFY chose the right team.
+
+Inspect `decided_by`, `laya_calls`, `stages.gate` and `stages.choose`: four Laya calls with CHOOSE skipped indicates the gate-human terminal; five calls and a System 1 verdict indicates S1 alone; `stages.choose.system_2_usable` and System 2 confidence distinguish a usable S2 answer from its human-review fallback. These examples do not force a branch. No page, queue action or customer reply is actually executed.
 
 Needs ollaya on port 11435. System 2 only runs on escalation and needs Ollama on port 11434 with the model set in the `S2 Config` workflow (default `gemma4:12b-mlx`; change it there on non-Apple-Silicon machines - see [Fresh machine notes](#fresh-machine-notes)). The CHOOSE branch reads it through its **Get S2 Model** node.
 
