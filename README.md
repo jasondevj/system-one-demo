@@ -9,7 +9,7 @@ Companion code for the talk **"The Two-Tier AI Stack - Decision and Reasoning"**
 - `workflows/system1-ticket-triage.json` - n8n workflow: four sample support tickets -> ollaya `/api/decide` (urgent? which team?) -> deterministic routing. "Smart-If": the AI perceives, the code decides.
 - `workflows/system2-ticket-triage.json` - System Two comparison: same tickets, same routing rule, but a general LLM via Ollama (port 11434) answers. Needs Ollama with a model pulled - default `gemma4:12b-mlx` (Apple Silicon only; see [Fresh machine notes](#fresh-machine-notes) for other platforms). The model name is set in one place, the `S2 Config` workflow. Runs live on the demo Mac with `gemma4:12b-mlx`; a fresh machine still needs a model in Ollama (see [Fresh machine notes](#fresh-machine-notes)).
 - `workflows/compare-s1-s2-evaluation.json` - standalone comparison workflow (n8n Evaluations): runs every ticket in a Data Table through BOTH systems in the same run and writes side-by-side results back, scoring each system against ground truth (team pick, urgency call, final route). Leaves the two demo workflows untouched.
-- `workflows/compare-s1-s2-metrics-evaluation.json` - same S1-vs-S2 comparison, plus native Evaluation-node summary scores in the Evaluations tab: per-system route correctness (S1 Route Score / S2 Route Score) and average per-system latency. Uses the same `tickets` dataset and table setup.
+- `workflows/compare-s1-s2-metrics-evaluation.json` - the same S1-vs-S2 comparison as scored runs in the Evaluations tab (n8n's newer evaluation panel): per-run S1 and S2 route-correctness scores plus average S1 latency, from the same `tickets` dataset. S1 still calls ollaya over HTTP; S2 runs through a native Ollama chain node (the bootcamp pattern) so the panel accepts the workflow. S2 latency is not measured here - use the plain comparison workflow for timings. See [step 5b](#5b-optional-scored-s1-vs-s2-runs-in-the-evaluations-tab).
 - `datasets/tickets.csv` - the tickets dataset for the comparison workflow (import it into an n8n Data Table).
 - `workflows/system1-ticket-triage-chat.json` - hosted chat with an S1 intent/maliciousness gate: safe casual messages get a short canned reply, tickets go to S1 triage, and low-confidence ticket triage escalates to S2. An extra demo, not a replacement for the first two workflows.
 - `fallback/` - demo-day insurance: canned ollaya responses, a one-field-switch responder workflow, and a recording shot list. See [Fallback plan](#fallback-plan-if-the-live-demo-dies).
@@ -88,6 +88,38 @@ Uses n8n's Evaluations feature - free on self-hosted, but the **Run test** butto
 The four tickets are synthetic examples with hand-picked ground-truth labels - they demonstrate the evaluation mechanics, they are not a general accuracy benchmark.
 
 **Evaluations tab notes.** After any re-import of the comparison workflow, pick the `tickets` table again in BOTH evaluation nodes (**When fetching a dataset row** and **Write Results to Dataset**): the table id belongs to your n8n instance, so it can't ship in the JSON. The Evaluations tab shows its setup wizard until the first test run is recorded on that copy of the workflow, so run the test once and then keep that copy in place; deleting or re-importing it resets the table selection and the run list. Do this before demo day.
+
+### 5b. (Optional) Scored S1 vs S2 runs in the Evaluations tab
+
+`compare-s1-s2-metrics-evaluation.json` runs the same comparison through n8n's evaluation panel, so each run gets named, comparable scores in the Evaluations tab rather than table columns. S1 keeps calling ollaya over HTTP; only S2 uses the native chain node.
+
+1. Import `workflows/compare-s1-s2-metrics-evaluation.json` and select your `tickets` table in **When fetching a dataset row**.
+2. On the **Ollama Chat Model** node, create an Ollama credential: base URL `http://host.docker.internal:11434`, no API key.
+3. In **S2 Config**, set the model for this machine (`mistral:7b` on Windows, `gemma4:12b-mlx` on the Mac).
+4. Execute the workflow once manually - the panel reads the row shape from a successful non-evaluation run.
+5. Open the workflow's **Evaluations** tab, set up tests, and pick **S2 Decide (AI)** as the AI node. Deselect the preselected **Correctness** check (it needs a judge model). Add three custom checks, named and expressed exactly like this:
+
+`s2_route_correct`:
+
+```
+={{ (() => { const raw = String($json.text ?? $json.output ?? '').trim(); let p; try { const c = raw.replace(/```(json)?/gi, ''); const s = c.indexOf('{'); const e = c.lastIndexOf('}'); if (s === -1 || e <= s) return 0; p = JSON.parse(c.slice(s, e + 1)); } catch (err) { return 0; } const team = ['infra','billing','sales'].includes(p.team) ? p.team : null; const conf = typeof p.confidence === 'number' ? p.confidence : null; const urg = typeof p.urgent === 'number' ? p.urgent : 0; if (team === null || conf === null) return 0; const route = conf < 0.6 ? 'human_review' : (urg >= 0.7 ? 'page_oncall:' + team : 'queue:' + team); return route === $('When fetching a dataset row').item.json.expected_route ? 1 : 0; })() }}
+```
+
+`s1_route_correct`:
+
+```
+={{ $('Collect S1 Result').first().json.s1_route === $('When fetching a dataset row').item.json.expected_route ? 1 : 0 }}
+```
+
+`s1_latency_ms`:
+
+```
+={{ $('Collect S1 Result').first().json.s1_latency_ms }}
+```
+
+6. Add the four demo tickets as test cases (fill `ticket`, `expected_route`, `expected_team`, `expected_urgent`), then run. Each case flows through BOTH systems; the run shows `s1_route_correct` and `s2_route_correct` side by side (1 = computed route matches `expected_route`), averaged over the cases, plus `s1_latency_ms` in milliseconds.
+
+The panel keeps its cases in its own `Evaluation: ...` table - the `tickets` table is only used for the one manual run in step 4. S2 latency cannot be measured in this panel: during an evaluation n8n runs nothing after the AI node, and the chat node does not expose Ollama's timing. Evaluation runs count toward the instance license's evaluation-workflow allowance.
 
 ### 6. Run the demos
 
