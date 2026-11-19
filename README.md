@@ -228,18 +228,22 @@ curl -X POST http://localhost:5678/webhook-test/five-questions \
    Use `/webhook/five-questions` instead of `/webhook-test/five-questions` when the workflow is active. Leave out `ticket` to use the double-charge example.
 4. The JSON reply has `final_route`, `decided_by`, a `stages` object with each step's output, `laya_calls`, `laya_total_ms` and `total_ms`. There are three terminal verdict nodes: **System 1 decided**, **human via gate**, and **System 2 answered**. The last can still return `human_review` if System 2 is unsure or unavailable. Help-article and team-handoff actions share the System 1 terminal.
 
-**PowerShell examples** (pwsh): click **Listen for test event** again before each `/webhook-test/` request. Use `/webhook/` instead when the workflow is active.
+**Three Mac-verified paths and commands** (pwsh, rehearsal on November 20, 2026): click **Listen for test event** again before each `/webhook-test/` request. Use `/webhook/` instead when the workflow is active. These are observed outcomes on that setup, not forced branches or guarantees for other models/configurations.
 
 ```powershell
-# System 1 alone: Tuesday ticket, documented in DEMO.md
+# Path 1 - Human via GATE: hmm (reported human_review on the Mac)
+Invoke-RestMethod -Method Post -Uri http://localhost:5678/webhook-test/five-questions -ContentType 'application/json' -Body '{"ticket":"hmm"}' | ConvertTo-Json -Depth 6
+
+# Path 2 - System 1 alone: Tuesday ticket (Mac-confirmed System 1 verdict)
 Invoke-RestMethod -Uri http://localhost:5678/webhook-test/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"Every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine."}' | ConvertTo-Json -Depth 6
 
-# System 1 escalates to System 2: enterprise ticket
+# Path 3 - System 1 escalates to System 2: enterprise ticket (Mac-confirmed usable S2 answer)
 Invoke-RestMethod -Uri http://localhost:5678/webhook-test/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"We are a 500-seat enterprise: your export fails every Tuesday, we were charged twice this month, and we need volume discount pricing. Can someone own all of this?"}' | ConvertTo-Json -Depth 6
 ```
 
-- Tuesday: the runbook records `queue:infra`, `decided_by` = `System 1 (Laya), policy in code`, with five Laya calls. Confirm the current response rather than assuming that outcome.
-- Enterprise: the Mac rehearsal reached System 2 with a usable answer. In that run, low CLASSIFY confidence overrode CHOOSE's `hand_to_team` model pick and caused escalation. Future outputs still depend on the models and configuration; escalation alone does not guarantee a usable System 2 answer.
+- **Path 1, human via GATE:** `hmm` was reported returning `human_review` on the Mac. The gate-human signature is `decided_by` = `System 1 gate -> human`, four Laya calls and CHOOSE skipped.
+- **Path 2, S1 alone:** the Tuesday ticket now also reached **Verdict (System 1 decided)** in the Mac rehearsal. The screenshot shows GATE `automate`, CHOOSE `hand_to_team`, and no policy override. The runbook records `queue:infra`; check the reply's `final_route` and `decided_by`, with five Laya calls.
+- **Path 3, S1 to S2:** the enterprise ticket reached System 2 with a usable answer in the Mac rehearsal. In that run, low CLASSIFY confidence overrode CHOOSE's `hand_to_team` model pick and caused escalation. Future outputs still depend on the models and configuration; escalation alone does not guarantee a usable System 2 answer.
 - Outage and `hmm`: both were observed reaching `human_review` on the Mac. They are not reliable examples of S1-only routing or S2 escalation. GATE runs before CHOOSE and can stop either ticket, even when CLASSIFY chose the right team.
 
 Inspect `decided_by`, `laya_calls`, `stages.gate` and `stages.choose`: four Laya calls with CHOOSE skipped indicates the gate-human terminal; five calls and a System 1 verdict indicates S1 alone; `stages.choose.system_2_usable` and System 2 confidence distinguish a usable S2 answer from its human-review fallback. These examples do not force a branch. No page, queue action or customer reply is actually executed.
