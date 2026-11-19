@@ -95,24 +95,36 @@ The four tickets are synthetic examples with hand-picked ground-truth labels - t
 
 ### 5b. (Optional) Scored S1 vs S2 runs in the Evaluations tab
 
-`compare-s1-s2-metrics-evaluation.json` runs the same comparison through n8n's evaluation panel, so each run gets named, comparable scores in the Evaluations tab rather than table columns. S1 keeps calling ollaya over HTTP; only S2 uses the native chain node.
+`compare-s1-s2-metrics-evaluation.json` runs the same comparison through n8n's evaluation panel, so each run gets named, comparable scores in the Evaluations tab rather than table columns: per-case check badges and run averages for both systems, against a fixed labelled dataset - `datasets/tickets-eval-10.csv`, ten synthetic tickets with hand-picked expected routes. S1 keeps calling ollaya over HTTP; only S2 uses the native chain node.
 
 1. Import `workflows/compare-s1-s2-metrics-evaluation.json` and select your `tickets` table in **When fetching a dataset row**.
 2. On the **Ollama Chat Model** node, create an Ollama credential. The dialog prefills **Base URL** with `http://localhost:11434` - replace it with `http://host.docker.internal:11434` so the n8n container can reach Ollama on your host. Leave **API Key** blank (it is only needed for Ollama behind an authenticating proxy, such as Open WebUI), then **Save**. Back on the node, select the saved credential in its credential dropdown.
-3. In this workflow's own **S2 Config** code node (the one on this canvas - NOT the shared `S2 Config` workflow imported from `s2-config.json`, which this workflow does not call), set the model for this machine (`mistral:7b` on Windows, `gemma4:12b-mlx` on the Mac). The model expression's preview refreshes only when the workflow runs again.
+3. In this workflow's own **S2 Config** code node (the one on this canvas - NOT the shared `S2 Config` workflow imported from `s2-config.json`, which this workflow does not call), set the model for this machine (`mistral:7b` on Windows, `gemma4:12b-mlx` on the Mac). The model expression's preview refreshes only when the workflow runs again. If you ever delete and re-add the **Ollama Chat Model** node, the model expression is lost with it - set the new node's model field directly to a model you have pulled instead.
 4. Execute the workflow once manually - the panel reads the row shape from a successful non-evaluation run.
-5. Open the workflow's **Evaluations** tab, set up tests, and pick **S2 Decide (AI)** as the AI node. Deselect the preselected **Correctness** check (it needs a judge model). Add three custom checks, named and expressed exactly like this:
-
-`s2_route_correct`:
-
-```
-={{ (() => { const raw = String($json.text ?? $json.output ?? '').trim(); let p; try { const c = raw.replace(/```(json)?/gi, ''); const s = c.indexOf('{'); const e = c.lastIndexOf('}'); if (s === -1 || e <= s) return 0; p = JSON.parse(c.slice(s, e + 1)); } catch (err) { return 0; } const team = ['infra','billing','sales'].includes(p.team) ? p.team : null; const conf = typeof p.confidence === 'number' ? p.confidence : null; const urg = typeof p.urgent === 'number' ? p.urgent : 0; if (team === null || conf === null) return 0; const route = conf < 0.6 ? 'human_review' : (urg >= 0.7 ? 'page_oncall:' + team : 'queue:' + team); return route === $('When fetching a dataset row').item.json.expected_route ? 1 : 0; })() }}
-```
+5. Open the workflow's **Evaluations** tab, set up tests, and pick **S2 Decide (AI)** as the AI node. Deselect the preselected **Correctness** check (it needs a judge model). Add five custom checks, named and expressed exactly like this (also collected in `datasets/eval-check-expressions.txt` for easy copying):
 
 `s1_route_correct`:
 
 ```
 ={{ $('Collect S1 Result').first().json.s1_route === $('When fetching a dataset row').item.json.expected_route ? 1 : 0 }}
+```
+
+`s2_route_correct`:
+
+```
+={{ (() => { const raw = String($json.text ?? $json.output ?? '').trim(); let p; try { const c = raw.replace(/```(json)?/gi, ''); const s = c.indexOf('{'); const e = c.lastIndexOf('}'); if (s === -1 || e <= s) return 0; p = JSON.parse(c.slice(s, e + 1)); } catch (err) { return 0; } if (!p || typeof p !== 'object' || Array.isArray(p)) return 0; const team = typeof p.team === 'string' ? p.team.trim() : ''; const prob = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1 ? v : null); const conf = prob(p.confidence); const urg = prob(p.urgent); const route = (!team || conf === null) ? 'no_answer' : (conf < 0.6 ? 'human_review' : (urg >= 0.7 ? 'page_oncall:' + team : 'queue:' + team)); return route === $('When fetching a dataset row').item.json.expected_route ? 1 : 0; })() }}
+```
+
+`s1_no_answer`:
+
+```
+={{ $('Collect S1 Result').first().json.s1_route === 'no_answer' ? 1 : 0 }}
+```
+
+`s2_invalid_output`:
+
+```
+={{ (() => { const raw = String($json.text ?? $json.output ?? '').trim(); let p; try { const c = raw.replace(/```(json)?/gi, ''); const s = c.indexOf('{'); const e = c.lastIndexOf('}'); if (s === -1 || e <= s) return 1; p = JSON.parse(c.slice(s, e + 1)); } catch (err) { return 1; } if (!p || typeof p !== 'object' || Array.isArray(p)) return 1; const teamOk = ['infra', 'billing', 'sales'].includes(typeof p.team === 'string' ? p.team.trim() : ''); const probOk = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1; return (teamOk && probOk(p.confidence) && probOk(p.urgent)) ? 0 : 1; })() }}
 ```
 
 `s1_latency_ms`:
@@ -121,9 +133,16 @@ The four tickets are synthetic examples with hand-picked ground-truth labels - t
 ={{ $('Collect S1 Result').first().json.s1_latency_ms }}
 ```
 
-6. Add the four demo tickets as test cases (fill `ticket`, `expected_route`, `expected_team`, `expected_urgent`), then run. Each case flows through BOTH systems; the run shows `s1_route_correct` and `s2_route_correct` side by side (1 = computed route matches `expected_route`), averaged over the cases, plus `s1_latency_ms` in milliseconds.
+6. Add the ten cases. Saving the check suite creates a data table named after this workflow - `Evaluation: System 1 vs System 2 - Ticket Triage (Evaluation + Metrics)` - with one example row in it from the setup wizard. Open that table under **Data tables** and look at its first row:
+   - If its ticket is "Production server is down, customers cannot log in, revenue impacted" (row 1 of the dataset), fill its three expected cells (`expected_team` = `infra`, `expected_urgent` = `1`, `expected_route` = `page_oncall:infra`), then use the table's **Import CSV** action with `datasets/tickets-eval-remaining-9.csv`.
+   - Otherwise import `datasets/tickets-eval-10.csv` instead, then either label the example row as your own eleventh case or remove it - left unlabelled it scores 0 on the route checks.
 
-The panel keeps its cases in its own `Evaluation: ...` table - the `tickets` table is only used for the one manual run in step 4. S2 latency cannot be measured in this panel: during an evaluation n8n runs nothing after the AI node, and the chat node does not expose Ollama's timing. Evaluation runs count toward the instance license's evaluation-workflow allowance.
+   In the import's column review, map `ticket`, `expected_team`, `expected_urgent`, `expected_route`; leave `expectedAnswer` and `caseName` empty.
+7. Run. Each case shows a badge per check (expand a case to read the model's raw answer), and the run shows each check's average over the cases.
+
+How the scores work: both route checks apply the same routing policy to their system's answer - confidence below 0.6 routes to `human_review`, urgent at or above 0.7 routes to `page_oncall:<team>`, otherwise `queue:<team>` - and give 1 when the computed route equals the case's `expected_route`, else 0. Only `expected_route` is scored; `expected_team` and `expected_urgent` are not checks in this tab, they document why each expected route is what it is. The two health flags measure different failure shapes per system: `s1_no_answer` is 1 when S1's decision service returned no usable team or confidence at all, while `s2_invalid_output` is 1 when the general model's free-text reply was unparseable JSON, or its team was outside the three options, or its urgent or confidence was not a number between 0 and 1. They are deliberately not the same check - S1's answer arrives structured from ollaya while S2's must be parsed out of prose - and a low-confidence `human_review` can be the correct route even when S2's team field was junk: the flag keeps that visible without changing the route score.
+
+The panel keeps its cases in its own `Evaluation: ...` table - the `tickets` table is only used for the one manual run in step 4. S2 latency cannot be measured in this panel: during an evaluation n8n runs nothing after the AI node, and the chat node does not expose Ollama's timing, so the latency side of the story comes from the plain comparison workflow in step 5. Evaluation runs count toward the instance license's evaluation-workflow allowance. The ten tickets are synthetic with hand-picked labels - they demonstrate the evaluation mechanics, they are not a benchmark. If a case misses, read it as a finding about the model, not a reason to edit the expected answers after the run.
 
 ### 6. Run the demos
 
