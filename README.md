@@ -78,6 +78,8 @@ docker exec system-one-demo-n8n n8n import:workflow --input=/data/workflows/five
 
 The System 1 side POSTs to `http://host.docker.internal:11435/api/decide` (ollaya on your host), the System 2 side to `http://host.docker.internal:11434/api/generate` (Ollama on your host).
 
+> **Which comparison setup?** Step [5c](#5c-recommended-separate-s1-and-s2-runs-over-the-same-10-tickets) - separate S1 and S2 runs over the same 10 labelled tickets - is the recommended main comparison. Steps 5 and 5b below are optional legacy alternatives kept for reference: 5 is the manual same-ticket flow, 5b is the S2-only Evaluations-tab variant. Skip both unless you specifically want them.
+
 ### 5. (Optional) Run the S1 vs S2 comparison
 
 Runs every ticket in a Data Table through BOTH systems and writes side-by-side results back, scoring each against ground truth. A small status table tells you whether the visible results come from a finished, complete run.
@@ -162,7 +164,7 @@ Run: **Execute workflow** on the S1 canvas, then on the S2 canvas (either order 
 
 Reading results: the same 10 rows show both systems side by side - computed route, per-field correctness flags (`correct` / `WRONG`), and two latency columns per system. `s1_wall_ms` / `s2_wall_ms` are the client-side wall time around each call with an identical measurer in both workflows - the headline comparison. `s1_server_ms` / `s2_server_ms` are each backend's own reported `total_duration`: the same named boundary (server-side total per call, model load included, transport excluded) but not identical internal composition (ollaya reports load + eval; Ollama load + prompt eval + eval), so treat server numbers as corroboration, not the headline. Every row also carries `s1_run_at` / `s2_run_at` marking which run produced it.
 
-Freshness, checked independently per system: in `comparison_runs`, the `latest_s1` / `latest_s2` key must show your run going `running` -> `complete` with `processed` = `expected`, and every row's `*_run_at` must be at or after that run's `started_at`. Reruns overwrite the same rows' cells - no duplicate rows. An interrupted run leaves its key stuck at `running` (blocking the next run until you set the cell to `aborted`), and its partially written rows are identifiable by older `*_run_at` values. A partial run is detectable, not prevented - the contract is how you tell, per system, whether the visible results came from a finished run. Run the two systems sequentially; concurrent writes to the same table from both workflows have not been verified.
+Freshness is fail-closed and visible in the table itself, per system: when a run claims, every row's `s1_status` / `s2_status` is set to `STALE since <timestamp> - a new run is in progress`; as each row completes, its status becomes `current as of <s1_run_at / s2_run_at>`. A row showing STALE still holds its previous-run values, clearly marked - an interrupted run can never leave old results looking current. In `comparison_runs`, the `latest_s1` / `latest_s2` key independently shows `running` -> `complete` with `processed` = `expected`; a run stuck at `running` blocks the next run until you set the cell to `aborted` and rerun. Reruns overwrite the same rows' `s1_*` / `s2_*` cells - no duplicate rows, and the `expected_*` label columns are never written. Run the two systems sequentially; concurrent writes to the same table from both workflows have not been verified.
 
 ### 6. Run the demos
 
