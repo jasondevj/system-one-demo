@@ -98,7 +98,7 @@ The four tickets are synthetic examples with hand-picked ground-truth labels - t
 `compare-s1-s2-metrics-evaluation.json` runs the same comparison through n8n's evaluation panel, so each run gets named, comparable scores in the Evaluations tab rather than table columns. S1 keeps calling ollaya over HTTP; only S2 uses the native chain node.
 
 1. Import `workflows/compare-s1-s2-metrics-evaluation.json` and select your `tickets` table in **When fetching a dataset row**.
-2. On the **Ollama Chat Model** node, create an Ollama credential: base URL `http://host.docker.internal:11434`, no API key.
+2. On the **Ollama Chat Model** node, create an Ollama credential. The dialog prefills **Base URL** with `http://localhost:11434` - replace it with `http://host.docker.internal:11434` so the n8n container can reach Ollama on your host. Leave **API Key** blank (it is only needed for Ollama behind an authenticating proxy, such as Open WebUI), then **Save**. Back on the node, select the saved credential in its credential dropdown.
 3. In **S2 Config**, set the model for this machine (`mistral:7b` on Windows, `gemma4:12b-mlx` on the Mac).
 4. Execute the workflow once manually - the panel reads the row shape from a successful non-evaluation run.
 5. Open the workflow's **Evaluations** tab, set up tests, and pick **S2 Decide (AI)** as the AI node. Deselect the preselected **Correctness** check (it needs a judge model). Add three custom checks, named and expressed exactly like this:
