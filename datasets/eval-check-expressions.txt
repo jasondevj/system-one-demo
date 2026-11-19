@@ -1,0 +1,27 @@
+Custom checks for the Evaluations tab (Add check -> Custom). Name and expression per check.
+Paste each expression INCLUDING the leading ={{ and trailing }}.
+
+--- CHECK 1 ---
+Name: s1_route_correct
+Expression:
+={{ $('Collect S1 Result').first().json.s1_route === $('When fetching a dataset row').item.json.expected_route ? 1 : 0 }}
+
+--- CHECK 2 ---
+Name: s2_route_correct
+Expression:
+={{ (() => { const raw = String($json.text ?? $json.output ?? '').trim(); let p; try { const c = raw.replace(/```(json)?/gi, ''); const s = c.indexOf('{'); const e = c.lastIndexOf('}'); if (s === -1 || e <= s) return 0; p = JSON.parse(c.slice(s, e + 1)); } catch (err) { return 0; } if (!p || typeof p !== 'object' || Array.isArray(p)) return 0; const team = typeof p.team === 'string' ? p.team.trim() : ''; const prob = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1 ? v : null); const conf = prob(p.confidence); const urg = prob(p.urgent); const route = (!team || conf === null) ? 'no_answer' : (conf < 0.6 ? 'human_review' : (urg >= 0.7 ? 'page_oncall:' + team : 'queue:' + team)); return route === $('When fetching a dataset row').item.json.expected_route ? 1 : 0; })() }}
+
+--- CHECK 3 ---
+Name: s1_no_answer
+Expression:
+={{ $('Collect S1 Result').first().json.s1_route === 'no_answer' ? 1 : 0 }}
+
+--- CHECK 4 ---
+Name: s2_invalid_output
+Expression:
+={{ (() => { const raw = String($json.text ?? $json.output ?? '').trim(); let p; try { const c = raw.replace(/```(json)?/gi, ''); const s = c.indexOf('{'); const e = c.lastIndexOf('}'); if (s === -1 || e <= s) return 1; p = JSON.parse(c.slice(s, e + 1)); } catch (err) { return 1; } if (!p || typeof p !== 'object' || Array.isArray(p)) return 1; const teamOk = ['infra', 'billing', 'sales'].includes(typeof p.team === 'string' ? p.team.trim() : ''); const probOk = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1; return (teamOk && probOk(p.confidence) && probOk(p.urgent)) ? 0 : 1; })() }}
+
+--- CHECK 5 ---
+Name: s1_latency_ms
+Expression:
+={{ $('Collect S1 Result').first().json.s1_latency_ms }}
