@@ -88,7 +88,10 @@
         450,
         560
       ],
-      "alwaysOutputData": true
+      "alwaysOutputData": true,
+      "settings": {
+        "alwaysOutputData": true
+      }
     },
     {
       "parameters": {
@@ -228,7 +231,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Score System 2 (general LLM via Ollama) against ground truth, per row.\n// Routing rule mirrored from the demo workflows' Route Decision node:\n//   confidence < 0.6 -> human_review; urgent >= 0.7 -> page_oncall:<team>; else queue:<team>\n// A parse failure is its own route so it can never accidentally match human_review.\n// Everything is written as TEXT so a CSV-imported Data Table (all string columns) accepts it.\n// Only s2_* columns are written - the expected_* label columns are never touched.\nconst row = $('When fetching a dataset row').first().json;\nconst s2 = $('Parse LLM JSON (S2)').first().json;\n\nconst CONF_MIN = 0.6, URGENT_MIN = 0.7;\nconst routeOf = (team, conf, urgentProb) => {\n  if (team === null || team === undefined || team === '' || conf === null || conf === undefined) return 'no_answer';\n  if (conf < CONF_MIN) return 'human_review';\n  if (urgentProb >= URGENT_MIN) return 'page_oncall:' + team;\n  return 'queue:' + team;\n};\n\n// Two same-boundary latencies (the S1 workflow measures its call the same two ways):\n//   s2_wall_ms   = client-side wall time around the HTTP call (identical measurer both systems)\n//   s2_server_ms = Ollama's own server-reported total_duration, ns -> ms (load + prompt eval + eval)\nconst s2_server_ms = s2.latency_ms;\nconst s2_run_at = new Date().toISOString();\nconst s2_wall_ms = Date.now() - Number($('Mark Call Start').first().json.call_start_ms || 0);\nconst s2_route = s2.parse_error ? 'parse_failed' : routeOf(s2.team, s2.confidence, s2.urgent);\n\nconst expected_team = String(row.expected_team ?? '').trim();\nconst expected_urgent = String(row.expected_urgent ?? '').trim() === '1';\nconst expected_route = String(row.expected_route ?? '').trim();\n\nconst flag = (ok) => (ok ? 'correct' : 'WRONG');\nconst s2_team_correct = expected_team ? flag(!s2.parse_error && s2.team === expected_team) : '';\nconst s2_urgent_correct = flag(!s2.parse_error && typeof s2.urgent === 'number' && (s2.urgent >= URGENT_MIN) === expected_urgent);\nconst s2_route_correct = flag(s2_route === expected_route);\n\nconst fmt = (v) => (typeof v === 'number' ? String(Math.round(v * 1000) / 1000) : String(v ?? ''));\n\nreturn [{ json: {\n  s2_team: s2.team || '',\n  s2_confidence: fmt(s2.confidence),\n  s2_urgent: fmt(s2.urgent),\n  s2_server_ms: String(s2_server_ms ?? ''),\n  s2_wall_ms: String(s2_wall_ms),\n  s2_run_at,\n  s2_route,\n  s2_parse_error: s2.parse_error || '',\n  s2_team_correct,\n  s2_urgent_correct,\n  s2_route_correct\n} }];"
+        "jsCode": "// Score System 2 (general LLM via Ollama) against ground truth, per row.\n// Routing rule mirrored from the demo workflows' Route Decision node:\n//   confidence < 0.6 -> human_review; urgent >= 0.7 -> page_oncall:<team>; else queue:<team>\n// A parse failure is its own route so it can never accidentally match human_review.\n// Everything is written as TEXT so a CSV-imported Data Table (all string columns) accepts it.\n// Only s2_* columns are written - the expected_* label columns are never touched.\n// s2_status makes freshness fail-closed in the table itself: at run start every row is marked\n// STALE; as a row completes, its status becomes 'current as of <s2_run_at>'. A row still showing\n// STALE means its s2_* values are from a previous run and must not be read as current.\nconst row = $('When fetching a dataset row').first().json;\nconst s2 = $('Parse LLM JSON (S2)').first().json;\n\nconst CONF_MIN = 0.6, URGENT_MIN = 0.7;\nconst routeOf = (team, conf, urgentProb) => {\n  if (team === null || team === undefined || team === '' || conf === null || conf === undefined) return 'no_answer';\n  if (conf < CONF_MIN) return 'human_review';\n  if (urgentProb >= URGENT_MIN) return 'page_oncall:' + team;\n  return 'queue:' + team;\n};\n\n// Two same-boundary latencies (the S1 workflow measures its call the same two ways):\n//   s2_wall_ms   = client-side wall time around the HTTP call (identical measurer both systems)\n//   s2_server_ms = Ollama's own server-reported total_duration, ns -> ms (load + prompt eval + eval)\nconst s2_server_ms = s2.latency_ms;\nconst s2_run_at = new Date().toISOString();\nconst s2_wall_ms = Date.now() - Number($('Mark Call Start').first().json.call_start_ms || 0);\nconst s2_route = s2.parse_error ? 'parse_failed' : routeOf(s2.team, s2.confidence, s2.urgent);\n\nconst expected_team = String(row.expected_team ?? '').trim();\nconst expected_urgent = String(row.expected_urgent ?? '').trim() === '1';\nconst expected_route = String(row.expected_route ?? '').trim();\n\nconst flag = (ok) => (ok ? 'correct' : 'WRONG');\nconst s2_team_correct = expected_team ? flag(!s2.parse_error && s2.team === expected_team) : '';\nconst s2_urgent_correct = flag(!s2.parse_error && typeof s2.urgent === 'number' && (s2.urgent >= URGENT_MIN) === expected_urgent);\nconst s2_route_correct = flag(s2_route === expected_route);\n\nconst fmt = (v) => (typeof v === 'number' ? String(Math.round(v * 1000) / 1000) : String(v ?? ''));\n\nreturn [{ json: {\n  s2_team: s2.team || '',\n  s2_confidence: fmt(s2.confidence),\n  s2_urgent: fmt(s2.urgent),\n  s2_server_ms: String(s2_server_ms ?? ''),\n  s2_wall_ms: String(s2_wall_ms),\n  s2_run_at,\n  s2_status: 'current as of ' + s2_run_at,\n  s2_route,\n  s2_parse_error: s2.parse_error || '',\n  s2_team_correct,\n  s2_urgent_correct,\n  s2_route_correct\n} }];"
       },
       "id": "c1100000-0000-4000-8000-000000000018",
       "name": "Score S2",
@@ -272,6 +275,10 @@
             {
               "outputName": "s2_run_at",
               "outputValue": "={{ $json.s2_run_at }}"
+            },
+            {
+              "outputName": "s2_status",
+              "outputValue": "={{ $json.s2_status }}"
             },
             {
               "outputName": "s2_route",
@@ -382,7 +389,7 @@
     },
     {
       "parameters": {
-        "content": "## SETUP (one time)\n\n1. This workflow reads and writes the 10-ticket evaluation table - the one you imported from `datasets/tickets-eval-10.csv`. Select it in BOTH evaluation nodes (**When fetching a dataset row** and **Write Results to Dataset**).\n2. Select `comparison_runs` in **Get Run Status**, **Claim Run** and **Record Progress**. If that table does not exist yet, create it with TEXT columns: `key`, `status`, `batch`, `expected`, `processed`, `started_at`, `completed_at`.\n3. Make sure Ollama (port 11434) is running on the host. The model name comes from the **S2 Config** workflow (import `workflows/s2-config.json` first) via **Get S2 Model**; edit it there (`mistral:7b` on Windows). If that call fails, S2 falls back to `gemma4:12b-mlx`.\n\n## RUN (single operator, one run at a time)\n\n**Execute workflow** on the canvas (full run from the trigger). n8n walks all 10 rows automatically, one execution per row. Each row runs through **System 2 only** (Ollama general LLM) and the `s2_*` columns are written back to the same rows: team, confidence, urgent, computed route, parse-error flag, correctness flags against `expected_team` / `expected_urgent` / `expected_route`, two latency numbers, and a `s2_run_at` timestamp. The `expected_*` label columns are never written. A parse failure gets its own route (`parse_failed`) so it can never accidentally match `human_review`.\n\n**Latency, measured identically on both systems:** `s2_wall_ms` is the client-side wall time around the Ollama call (the same measurer wraps the S1 call in the other workflow - use wall for the headline comparison). `s2_server_ms` is Ollama's own reported total_duration (load + prompt eval + eval), a corroborating server-side number.\n\n**Before trusting the results:** `comparison_runs` key `latest_s2` must show YOUR run from start to finish - it flips to `running` with a fresh `started_at`, and results are current only once it shows `complete` with `processed` = `expected`, and every row's `s2_run_at` is at or after the run's `started_at` - a row with an older timestamp is leftover from a previous run, not part of this one. Anything else (never went `running`, stuck `running`, old timestamps) means the visible results are not from a finished run.\n\n**Recovery:** stop any active execution of this workflow (Executions list), set the `latest_s2` status cell to `aborted`, then rerun.\n\nRun **System 1 Eval** separately to fill the `s1_*` columns on the same 10 rows - same tickets, same expected labels, independently executed.",
+        "content": "## SETUP (one time)\n\n1. This workflow reads and writes the 10-ticket evaluation table - the one you imported from `datasets/tickets-eval-10.csv`. Select it in BOTH evaluation nodes (**When fetching a dataset row** and **Write Results to Dataset**).\n2. Select `comparison_runs` in **Get Run Status**, **Claim Run** and **Record Progress**. If that table does not exist yet, create it with TEXT columns: `key`, `status`, `batch`, `expected`, `processed`, `started_at`, `completed_at`.\n3. Make sure Ollama (port 11434) is running on the host. The model name comes from the **S2 Config** workflow (import `workflows/s2-config.json` first) via **Get S2 Model**; edit it there (`mistral:7b` on Windows). If that call fails, S2 falls back to `gemma4:12b-mlx`.\n\n## RUN (single operator, one run at a time)\n\n**Execute workflow** on the canvas (full run from the trigger). n8n walks all 10 rows automatically, one execution per row. Each row runs through **System 2 only** (Ollama general LLM) and the `s2_*` columns are written back to the same rows: team, confidence, urgent, computed route, parse-error flag, correctness flags against `expected_team` / `expected_urgent` / `expected_route`, two latency numbers, and a `s2_run_at` timestamp. The `expected_*` label columns are never written. A parse failure gets its own route (`parse_failed`) so it can never accidentally match `human_review`.\n\n**Latency, measured identically on both systems:** `s2_wall_ms` is the client-side wall time around the Ollama call (the same measurer wraps the S1 call in the other workflow - use wall for the headline comparison). `s2_server_ms` is Ollama's own reported total_duration (load + prompt eval + eval), a corroborating server-side number.\n\n**Before trusting the results:** `comparison_runs` key `latest_s2` must show YOUR run from start to finish - it flips to `running` with a fresh `started_at`, and results are current only once it shows `complete` with `processed` = `expected`, and every row's `s2_run_at` is at or after the run's `started_at` - a row with an older timestamp is leftover from a previous run, not part of this one. Anything else (never went `running`, stuck `running`, old timestamps) means the visible results are not from a finished run.\n\n**Recovery:** stop any active execution of this workflow (Executions list), set the `latest_s2` status cell to `aborted`, then rerun.\n\nRun **System 1 Eval** separately to fill the `s1_*` columns on the same 10 rows - same tickets, same expected labels, independently executed.\n\nFail-closed freshness: when a run claims, every row's s2_status is set to 'STALE since <ts>'; as each row completes it becomes 'current as of <s2_run_at>'. A row still showing STALE holds previous-run s2_* values - never read it as current. An interrupted run therefore leaves visible STALE markers (and comparison_runs stuck 'running' until set to 'aborted').",
         "height": 900,
         "width": 600,
         "color": 4
@@ -394,6 +401,44 @@
       "position": [
         -820,
         -140
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "tickets eval 10"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "expected_route",
+              "condition": "isNotEmpty"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "s2_status": "={{ 'STALE since ' + $now.toISO() + ' - a new S2 run is in progress; s2_* values on this row are from a previous run' }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "markRowsStaleS201",
+      "name": "Mark Rows Stale (S2)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1140,
+        560
       ]
     }
   ],
@@ -456,7 +501,7 @@
       "main": [
         [
           {
-            "node": "Restore Ticket",
+            "node": "Mark Rows Stale (S2)",
             "type": "main",
             "index": 0
           }
@@ -558,6 +603,17 @@
           }
         ],
         []
+      ]
+    },
+    "Mark Rows Stale (S2)": {
+      "main": [
+        [
+          {
+            "node": "Restore Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   }
