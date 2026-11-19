@@ -1,11 +1,11 @@
-ticket,expected_team,expected_urgent,expected_route
-"Production server is down, customers cannot log in, revenue impacted",infra,1,page_oncall:infra
-My laptop won't connect to the VPN this morning,infra,0,queue:infra
-The wifi on my laptop drops every afternoon around 3pm,infra,0,queue:infra
-I was charged twice for my subscription this month,billing,0,queue:billing
-Your payment page is failing for every customer and no one can check out - we are losing revenue by the minute,billing,1,page_oncall:billing
-Can I get a copy of last year's invoices for accounting?,billing,0,queue:billing
-Do you offer volume discounts for 500 seats?,sales,0,queue:sales
-Our largest customer's procurement window closes at 5pm today and they need an approved quote now or the deal is lost,sales,1,page_oncall:sales
-hmm,,0,human_review
-Not sure who to talk to about the thing from last week,,0,human_review
+ticket,expected_team,expected_urgent,expected_route,s1_status,s2_status
+"Production server is down, customers cannot log in, revenue impacted",infra,1,page_oncall:infra,,
+My laptop won't connect to the VPN this morning,infra,0,queue:infra,,
+The wifi on my laptop drops every afternoon around 3pm,infra,0,queue:infra,,
+I was charged twice for my subscription this month,billing,0,queue:billing,,
+Your payment page is failing for every customer and no one can check out - we are losing revenue by the minute,billing,1,page_oncall:billing,,
+Can I get a copy of last year's invoices for accounting?,billing,0,queue:billing,,
+Do you offer volume discounts for 500 seats?,sales,0,queue:sales,,
+Our largest customer's procurement window closes at 5pm today and they need an approved quote now or the deal is lost,sales,1,page_oncall:sales,,
+hmm,,0,human_review,,
+Not sure who to talk to about the thing from last week,,0,human_review,,
