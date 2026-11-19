@@ -35,8 +35,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        280,
-        200
+        1300,
+        340
       ]
     },
     {
@@ -53,8 +53,8 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        280,
-        480
+        1530,
+        340
       ],
       "onError": "continueRegularOutput"
     },
@@ -74,8 +74,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        520,
-        480
+        1760,
+        340
       ]
     },
     {
@@ -87,8 +87,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        800,
-        480
+        2000,
+        340
       ]
     },
     {
@@ -100,7 +100,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1080,
+        2240,
         340
       ]
     },
@@ -194,15 +194,15 @@
       "type": "n8n-nodes-base.evaluation",
       "typeVersion": 4.8,
       "position": [
-        1340,
+        2480,
         340
       ]
     },
     {
       "parameters": {
-        "content": "## SETUP (one time)\n\n1. In n8n: **Data tables** -> create a table named `tickets` and import `datasets/tickets.csv` from this repo.\n2. In BOTH evaluation nodes (**When fetching a dataset row** and **Write Results to Dataset**), select your `tickets` table.\n3. Make sure ollaya (port 11435) and Ollama (port 11434) are running on the host.\n\n## RUN\n\nWorkflow **Evaluations** tab -> **Run test**. Each dataset row runs through BOTH System 1 (ollaya laya:en) and System 2 (Ollama LLM) in the same execution, and the side-by-side columns (team, confidence, urgent, computed route, latency per system) are written back to the table, with per-row flags scoring BOTH systems against the dataset's ground truth (expected_team / expected_urgent / expected_route) on team pick, urgency call and final route, plus the agree flag between systems. Result columns are text so CSV-imported tables accept them.\n\nThe S2 model name comes from the **S2 Config** workflow (import `workflows/s2-config.json` first) via **Get S2 Model**; edit it there. If that call fails, S2 falls back to `gemma4:12b-mlx`.",
-        "height": 420,
-        "width": 560,
+        "content": "## SETUP (one time)\n\n1. In n8n: **Data tables** -> create a table named `tickets` and import `datasets/tickets.csv` from this repo.\n2. Create a second table named `comparison_runs` with TEXT columns: `key`, `status`, `batch`, `expected`, `processed`, `started_at`, `completed_at`.\n3. Select `tickets` in BOTH evaluation nodes (**When fetching a dataset row** and **Write Results to Dataset**); select `comparison_runs` in **Get Run Status**, **Claim Run** and **Record Progress**.\n4. Make sure ollaya (port 11435) and Ollama (port 11434) are running on the host.\n\n## RUN (single operator, one run at a time)\n\n**Execute workflow** on the canvas (full run from the trigger). n8n walks every dataset row automatically, one execution per row. Each row runs through BOTH System 1 (ollaya laya:en) and System 2 (Ollama LLM), and the side-by-side columns (team, confidence, urgent, computed route, latency per system) are written back to `tickets`, with per-row flags scoring BOTH systems against ground truth (expected_team / expected_urgent / expected_route), plus the agree flag.\n\n**Before trusting the table:** `comparison_runs` must show YOUR run from start to finish: it flips to `running` with a fresh `started_at` when your run starts, and the `tickets` results are current only once it shows `complete` with `processed` = `expected`. Anything else (never saw it go `running`, stuck `running`, old timestamps) means the visible results are not from a finished run.\n\n**Recovery:** stop any active execution of this workflow (Executions list), set the status cell to `aborted`, then rerun. Partial runs of individual nodes bypass this safeguard.\n\nThe **Run test** button in the Evaluations tab does not apply to this workflow (it has no Set Metrics step); use the metrics comparison workflow for scored runs.\n\nThe S2 model name comes from the **S2 Config** workflow (import `workflows/s2-config.json` first) via **Get S2 Model**; edit it there. If that call fails, S2 falls back to `gemma4:12b-mlx`.",
+        "height": 940,
+        "width": 600,
         "color": 4
       },
       "id": "c1100000-0000-4000-8000-000000000007",
@@ -210,8 +210,220 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -140,
-        -120
+        -820,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "first-manual-row",
+              "leftValue": "={{ typeof $json._rowsLeft === 'number' && $json.row_number === 0 ? 'yes' : 'no' }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c1100000-0000-4000-8000-000000000010",
+      "name": "First manual row?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        230,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "comparison_runs"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "condition": "eq",
+              "keyValue": "latest"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c1100000-0000-4000-8000-000000000011",
+      "name": "Get Run Status",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        450,
+        560
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Overlap guard for a single operator: one comparison run at a time.\n// A leftover 'running' status means a previous run is still going, failed, or was canceled.\n// Recovery: stop any active execution of this workflow (Executions list), then open the\n// comparison_runs table, set the status cell to 'aborted', then rerun.\nconst st = $input.first().json;\nif (st.status === 'running') {\n  throw new Error('A comparison run is marked as still in progress (started ' + (st.started_at || 'unknown') + '). Stop any active execution of this workflow, set the comparison_runs status cell to aborted, then rerun.');\n}\nreturn $input.all();"
+      },
+      "id": "c1100000-0000-4000-8000-000000000012",
+      "name": "Reject If Running",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "comparison_runs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "condition": "eq",
+              "keyValue": "latest"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "key": "latest",
+            "status": "running",
+            "batch": "={{ $execution.id }}",
+            "expected": "={{ String($('When fetching a dataset row').first().json._rowsLeft + 1) }}",
+            "processed": "0",
+            "started_at": "={{ $now.toISO() }}",
+            "completed_at": ""
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "c1100000-0000-4000-8000-000000000013",
+      "name": "Claim Run",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        910,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// The status-table nodes above emit the comparison_runs row, not the dataset row.\n// Hand the original row back to the chain (Laya reads $json.ticket).\nreturn [{ json: $('When fetching a dataset row').first().json, pairedItem: { item: 0 } }];"
+      },
+      "id": "c1100000-0000-4000-8000-000000000014",
+      "name": "Restore Ticket",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "manual-iteration",
+              "leftValue": "={{ typeof $('When fetching a dataset row').first().json._rowsLeft === 'number' ? 'yes' : 'no' }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c1100000-0000-4000-8000-000000000015",
+      "name": "Manual iteration?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2710,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "comparison_runs"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "condition": "eq",
+              "keyValue": "latest"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "key": "latest",
+            "status": "={{ $('When fetching a dataset row').first().json._rowsLeft === 0 ? 'complete' : 'running' }}",
+            "processed": "={{ String($('When fetching a dataset row').first().json.row_number + 1) }}",
+            "completed_at": "={{ $('When fetching a dataset row').first().json._rowsLeft === 0 ? $now.toISO() : '' }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "c1100000-0000-4000-8000-000000000016",
+      "name": "Record Progress",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2940,
+        340
       ]
     }
   ],
@@ -220,7 +432,7 @@
       "main": [
         [
           {
-            "node": "Laya Decide (S1)",
+            "node": "First manual row?",
             "type": "main",
             "index": 0
           }
@@ -280,6 +492,91 @@
             "index": 0
           }
         ]
+      ]
+    },
+    "First manual row?": {
+      "main": [
+        [
+          {
+            "node": "Get Run Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Laya Decide (S1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Run Status": {
+      "main": [
+        [
+          {
+            "node": "Reject If Running",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reject If Running": {
+      "main": [
+        [
+          {
+            "node": "Claim Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim Run": {
+      "main": [
+        [
+          {
+            "node": "Restore Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Ticket": {
+      "main": [
+        [
+          {
+            "node": "Laya Decide (S1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Results to Dataset": {
+      "main": [
+        [
+          {
+            "node": "Manual iteration?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual iteration?": {
+      "main": [
+        [
+          {
+            "node": "Record Progress",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },
