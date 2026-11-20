@@ -17,7 +17,7 @@ Companion code for the talk **"The Two-Tier AI Stack - Decision and Reasoning"**
 - `workflows/system1-ticket-triage-chat.json` - hosted chat with an S1 intent/maliciousness gate: safe casual messages get a short canned reply, tickets go to S1 triage, and low-confidence ticket triage escalates to S2. An extra demo, not a replacement for the first two workflows.
 - `fallback/` - demo-day insurance: canned ollaya responses, a one-field-switch responder workflow, and a recording shot list. See [Fallback plan](#fallback-plan-if-the-live-demo-dies).
 - `workflows/s2-config.json` - tiny `S2 Config` workflow: the one place to set the System 2 Ollama model name. Import it first; the four System 2 workflows call it.
-- `workflows/five-questions-demo.json` - the talk slide as one workflow: a webhook takes a ticket and System 1 (Laya) decides at each of CLASSIFY, ROUTE, RANK, GATE and CHOOSE in a different way (choice and noul calls), with code applying policy and an escalation to System 2. Sticky notes name each step. See [step 8](#8-optional-the-five-questions-workflow).
+- `workflows/five-questions-demo.json` - the talk slide as one workflow: a webhook takes a ticket and System 1 (Laya) decides at each of CLASSIFY, ROUTE, RANK, GATE and CHOOSE in a different way (choice, noul and score calls), with code applying policy and an escalation to System 2. Sticky notes name each step. See [step 8](#8-optional-the-five-questions-workflow).
 - `workflows/system1-choice-poc.json` - minimal question + choices proof of concept against the same endpoint.
 - `docker-compose.yml` - slim local n8n stack (just n8n, nothing else).
 - `.env.example` - n8n version pin.
@@ -207,7 +207,7 @@ The canned responder currently returns only `urgent` and `team`, not the new gat
 
 1. **CLASSIFY** - a System 1 *choice* call picks the team (infra, billing or sales) with a confidence.
 2. **ROUTE** - a System 1 *noul* call scores urgency from 0 to 1. Then plain code routes: >= 0.7 pages on-call, otherwise the team queue. Once the model decides, routing is just code.
-3. **RANK** - a System 1 *noul* call scores business impact. The score becomes a priority: P1 >= 0.8, P2 >= 0.5, otherwise P3. Optionally send `expected_team` and the reply marks the CLASSIFY pick right or wrong. This is a compact score for one ticket, not the Data Table evaluation in step 5.
+3. **RANK** - a System 1 *score* call picks a business-impact level (low, medium or high). Code maps the expected level to a priority: P1 >= 1.5, P2 >= 0.5, otherwise P3. Optionally send `expected_team` and the reply marks the CLASSIFY pick right or wrong. This is a compact score for one ticket, not the Data Table evaluation in step 5.
 4. **GATE** - a System 1 *choice* call decides: automate, or a human must handle it (legal threat, security incident, large refund, very upset customer). A human verdict stops the run at `human_review`. An unusable answer fails safe to human.
 5. **CHOOSE** - a System 1 *choice* call picks the action: resolve with a help article, hand to the team, or escalate to System 2. Code policy on top: an urgent ticket is never auto-answered, and a CLASSIFY confidence under 0.6 always escalates. Escalation calls System 2 (Ollama, default `gemma4:12b-mlx`). If System 2 is also under 0.6 or fails to answer, the verdict is `human_review`.
 
@@ -222,25 +222,32 @@ Run it:
 ```
 curl -X POST http://localhost:5678/webhook-test/five-questions \
   -H 'Content-Type: application/json' \
-  -d '{"ticket": "Production server is down, customers cannot log in, revenue impacted", "expected_team": "infra"}'
+  -d '{"ticket":"Every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine."}'
 ```
 
    Use `/webhook/five-questions` instead of `/webhook-test/five-questions` when the workflow is active. Leave out `ticket` to use the double-charge example.
-4. The JSON reply has `final_route`, `decided_by`, a `stages` object with the output of each of the five steps (which call type, the scores, that call's latency), `laya_calls`, `laya_total_ms` and `total_ms`. Try a few tickets: an outage (pages on-call), a pricing question (may get a help-article reply), a threat or security-style complaint (the gate sends it to a human), and a vague `hmm` (CLASSIFY confidence is likely under 0.6, so it escalates to System 2).
+4. The JSON reply has `final_route`, `decided_by`, a `stages` object with each step's output, `laya_calls`, `laya_total_ms` and `total_ms`. There are three terminal verdict nodes: **System 1 decided**, **human via gate**, and **System 2 answered**. The last can still return `human_review` if System 2 is unsure or unavailable. Help-article and team-handoff actions share the System 1 terminal.
 
-**Two PowerShell commands, one per path** (pwsh; use `/webhook/` instead of `/webhook-test/` once the workflow is active):
+**Three Mac-verified paths and commands** (pwsh, rehearsal on November 20, 2026): click **Listen for test event** again before each `/webhook-test/` request. Use `/webhook/` instead when the workflow is active. These are observed outcomes on that setup, not forced branches or guarantees for other models/configurations.
 
 ```powershell
-# Path 1 - System 1 decides alone (outage: classified infra, paged on-call)
-Invoke-RestMethod -Method Post -Uri http://localhost:5678/webhook-test/five-questions -ContentType 'application/json' `
-  -Body '{"ticket": "Production server is down, customers cannot log in, revenue impacted", "expected_team": "infra"}' | ConvertTo-Json -Depth 6
+# Path 1 - Human via GATE: hmm (reported human_review on the Mac)
+Invoke-RestMethod -Method Post -Uri http://localhost:5678/webhook-test/five-questions -ContentType 'application/json' -Body '{"ticket":"hmm"}' | ConvertTo-Json -Depth 6
 
-# Path 2 - System 1 escalates to System 2 (a vague ticket; CLASSIFY confidence is likely under 0.6)
-Invoke-RestMethod -Method Post -Uri http://localhost:5678/webhook-test/five-questions -ContentType 'application/json' `
-  -Body '{"ticket": "hmm"}' | ConvertTo-Json -Depth 6
+# Path 2 - System 1 alone: Tuesday ticket (Mac-confirmed System 1 verdict)
+Invoke-RestMethod -Uri http://localhost:5678/webhook-test/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"Every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine."}' | ConvertTo-Json -Depth 6
+
+# Path 3 - System 1 escalates to System 2: enterprise ticket (Mac-confirmed usable S2 answer)
+Invoke-RestMethod -Uri http://localhost:5678/webhook-test/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"We are a 500-seat enterprise: your export fails every Tuesday, we were charged twice this month, and we need volume discount pricing. Can someone own all of this?"}' | ConvertTo-Json -Depth 6
 ```
 
-Compare `decided_by` and `laya_total_ms` in the two replies: path 1 says System 1 (Laya), path 2 says System 2 (Ollama) and takes seconds longer.
+- **Path 1, human via GATE:** `hmm` was reported returning `human_review` on the Mac. The gate-human signature is `decided_by` = `System 1 gate -> human`, four Laya calls and CHOOSE skipped.
+- **Path 2, S1 alone:** the Tuesday ticket now also reached **Verdict (System 1 decided)** in the Mac rehearsal. The screenshot shows GATE `automate`, CHOOSE `hand_to_team`, and no policy override. The runbook records `queue:infra`; check the reply's `final_route` and `decided_by`, with five Laya calls.
+- **Path 3, S1 to S2:** the enterprise ticket reached System 2 with a usable answer in the Mac rehearsal. In that run, low CLASSIFY confidence overrode CHOOSE's `hand_to_team` model pick and caused escalation. Future outputs still depend on the models and configuration; escalation alone does not guarantee a usable System 2 answer.
+- **Updated later on November 20:** RANK now demonstrates the third question type, a System 1 *score* call (impact level, mapped to P1/P2/P3), replacing the earlier *noul* RANK. The recorded verdicts above were rehearsed with the noul RANK; the routing policy and the other four stages are unchanged, but re-run the commands to verify the paths with the new RANK.
+- Outage and `hmm`: both were observed reaching `human_review` on the Mac. They are not reliable examples of S1-only routing or S2 escalation. GATE runs before CHOOSE and can stop either ticket, even when CLASSIFY chose the right team.
+
+Inspect `decided_by`, `laya_calls`, `stages.gate` and `stages.choose`: four Laya calls with CHOOSE skipped indicates the gate-human terminal; five calls and a System 1 verdict indicates S1 alone; `stages.choose.system_2_usable` and System 2 confidence distinguish a usable S2 answer from its human-review fallback. These examples do not force a branch. No page, queue action or customer reply is actually executed.
 
 Needs ollaya on port 11435. System 2 only runs on escalation and needs Ollama on port 11434 with the model set in the `S2 Config` workflow (default `gemma4:12b-mlx`; change it there on non-Apple-Silicon machines - see [Fresh machine notes](#fresh-machine-notes)). The CHOOSE branch reads it through its **Get S2 Model** node.
 
