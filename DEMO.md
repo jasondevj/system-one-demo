@@ -6,7 +6,7 @@ A checklist, not documentation. Setup details live in the [README](README.md).
 
 - [ ] `docker compose up -d` in this repo, then open http://localhost:5678
 - [ ] ollaya running on port 11435 (System 1)
-- [ ] System 2 backends: Ollama on port 11434 (model: `gemma4:12b-mlx`, used by the five-questions and chat escalations via `S2 Config`) and the OpenAI-compatible endpoint on port 8787 (model: `codex-local`, used by the S2 triage and S2 eval workflows via their **Endpoint Config** node)
+- [ ] Ollama running on port 11434 (System 2; model: `gemma4:12b-mlx`, set in the `S2 Config` workflow)
 - [ ] All workflows imported and published (active): S2 Config first, then the rest. Keep this copy untouched until the talk.
 - [ ] Eval setup done once (README step 5c): `tickets eval 10` data table imported and selected in **When fetching a dataset row** of both eval workflows, `comparison runs` table created
 - [ ] Fallback ready: `fallback/capture-canned.sh` re-run, backup recording captured (see the end of this file)
@@ -17,13 +17,13 @@ Both models pay a cold-start tax. Fire one throwaway call at each, then keep the
 
 1. **System 1 warmup** - run the Tuesday ticket command (section 3) once.
 2. **System 2 warmup** - run the enterprise command (section 3) once and wait for it to finish. A cold gemma can take two minutes or more (the node timeout is 300 s); if the reply says `human_review`, run it again. Do not go on stage until it returns a System 2 answer.
-3. gemma is dropped from memory after a few idle minutes. If you wait longer than that, repeat step 2. The S2 triage/eval endpoint (section 1) warms up the first time you run it.
+3. gemma is dropped from memory after a few idle minutes. If you wait longer than that, repeat step 2.
 
 ## Live run order
 
 ### 1. S2 triage (canvas)
 
-Open `system2-openai-ticket-triage`, hit **Execute workflow**, and watch System 2 reason through the four tickets via the OpenAI-compatible endpoint (`codex-local` on port 8787, set in **Endpoint Config**). Slow and deliberate: this is what deep reasoning costs, and it sets up the contrast. (The Ollama variant `system2-ticket-triage` reads its model from the `S2 Config` workflow instead.)
+Open `system2-ticket-triage`, hit **Execute workflow**, and watch System 2 reason through the four tickets (Ollama, model from the `S2 Config` workflow, default `gemma4:12b-mlx`). Slow and deliberate: this is what deep reasoning costs, and it sets up the contrast. The first run can take a few minutes while Ollama loads the model; later runs are much faster. (An OpenAI-compatible variant, `system2-openai-ticket-triage`, is also in the repo.)
 
 ### 2. S1 triage (canvas)
 
@@ -56,7 +56,7 @@ Do not use the outage ticket ("Production server is down... revenue impacted") a
 
 ### 4. S2 10-question eval (canvas)
 
-Run `eval-s2-openai-tickets-10`: n8n walks all 10 labelled tickets (`tickets eval 10` table), one execution per row, and writes the `s2_*` columns - computed route, per-field correctness, token counts, wall and server latency. System 2 answers through the OpenAI-compatible endpoint here. (The Ollama variant is `eval-s2-tickets-10`.)
+Run `eval-s2-tickets-10`: n8n walks all 10 labelled tickets (`tickets eval 10` table), one execution per row, and writes the `s2_*` columns - computed route, per-field correctness, token counts, wall and server latency. S2 runs through Ollama (model from the `S2 Config` workflow). (An OpenAI-compatible variant, `eval-s2-openai-tickets-10`, is also in the repo.)
 
 ### 5. S1 10-question eval (canvas)
 
