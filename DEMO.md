@@ -30,7 +30,7 @@ Run `system1-ticket-triage` from the canvas on the four tickets. Instant answers
 Invoke-RestMethod -Uri http://localhost:5678/webhook/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"Every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine."}' | ConvertTo-Json -Depth 6
 ```
 
-Expect (verified on the Mac): all five stages (classify, route, rank, gate, choose), `final_route` = `queue:infra`, `decided_by` = System 1 (Laya), policy in code, about 150 ms in total (classify confidence about 0.78, action `hand_to_team`). Say: "five decisions from two kinds of System 1 call (choice and noul), and the code only applies the rules."
+Expect (verified on the Mac): all five stages (classify, route, rank, gate, choose), `final_route` = `queue:infra`, `decided_by` = System 1 (Laya), policy in code, about 150 ms in total (classify confidence about 0.78, action `hand_to_team`). Say: "five decisions from all three kinds of System 1 call (choice, noul and score), and the code only applies the rules."
 
 Do not use the outage ticket ("Production server is down... revenue impacted") or `hmm` for this step: on the Mac both stopped at the gate and went to `human_review` after four calls. That is a fine side demo of "knowing when not to automate", but it never reaches CHOOSE.
 
