@@ -107,13 +107,13 @@
         "url": "http://host.docker.internal:11435/api/decide",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  model: 'laya:en',\n  state: $json.ticket,\n  questions: {\n    impact: { type: 'noul', instructions: 'Does this issue hurt revenue or block many customers right now? Score how large the business impact is.' }\n  }\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'laya:en',\n  state: $json.ticket,\n  questions: {\n    impact: { type: 'score', instructions: 'How large is the business impact of this ticket?', criteria: ['Low: minor inconvenience, no revenue at risk', 'Medium: disrupts work for some customers or one team', 'High: blocks revenue or many customers right now'] }\n  }\n}) }}",
         "options": {
           "timeout": 15000
         }
       },
       "id": "b2000000-0000-4000-8000-000000000007",
-      "name": "Rank: Laya noul (business impact)",
+      "name": "Rank: Laya score (business impact)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -124,7 +124,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// RANK: a System 1 NOUL call scored business impact. Code turns the score into a queue position.\nconst s = $('Route (code applies policy)').first().json;\nconst item = $input.first().json;\nconst im = item.answers?.impact?.noul;\nconst ok = (v => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1)(im);\nconst ms = Number.isFinite(item.total_duration) ? Math.round(item.total_duration / 1e6) : 0;\nconst priority = !ok ? 'unscored' : im >= 0.8 ? 'P1' : im >= 0.5 ? 'P2' : 'P3';\nreturn [{ json: { ...s, laya_calls: s.laya_calls + 1, laya_ms: s.laya_ms + ms,\n  rank: { call: 'noul', impact: ok ? im : null, priority, usable: ok, laya_ms: ms } } }];"
+        "jsCode": "// RANK: a System 1 SCORE call picked a business-impact level. Code turns the expected level into a priority.\nconst s = $('Route (code applies policy)').first().json;\nconst item = $input.first().json;\nconst im = item.answers?.impact?.score;\nconst ok = (v => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 2)(im);\nconst ms = Number.isFinite(item.total_duration) ? Math.round(item.total_duration / 1e6) : 0;\nconst priority = !ok ? 'unscored' : im >= 1.5 ? 'P1' : im >= 0.5 ? 'P2' : 'P3';\nreturn [{ json: { ...s, laya_calls: s.laya_calls + 1, laya_ms: s.laya_ms + ms,\n  rank: { call: 'score', impact: ok ? im : null, priority, usable: ok, laya_ms: ms } } }];"
       },
       "id": "b2000000-0000-4000-8000-000000000008",
       "name": "Rank (priority from score)",
@@ -350,7 +350,7 @@
     },
     {
       "parameters": {
-        "content": "## ALL FIVE, IN ONE N8N WORKFLOW\n\nOne ticket in. System 1 (Laya) decides at every stage, in a different way: a CHOICE call, NOUL scores, a gate decision, an action choice. Plain code only applies policy to what the model decided.\n\nSEND: POST {\"ticket\": \"...\"} (optional \"expected_team\": \"infra\"|\"billing\"|\"sales\") to /webhook/five-questions (activated) or /webhook-test/five-questions (click Execute workflow first). The JSON reply shows every stage, each Laya latency, and totals.\n\nNeeds ollaya on :11435 (laya:en). System 2 (Ollama :11434) runs only when System 1 escalates. Its model name comes from the **S2 Config** workflow (import `workflows/s2-config.json` first) via **Get S2 Model**; edit it there (default `gemma4:12b-mlx`).\n\nDEMO CAVEATS: thresholds (0.7 urgent, 0.6 classify confidence, impact bands) are demo values. Routes are labels only: nothing is paged, queued or sent. The gate is a demo guardrail, NOT a security boundary.",
+        "content": "## ALL FIVE, IN ONE N8N WORKFLOW\n\nOne ticket in. System 1 (Laya) decides at every stage, in a different way: CHOICE calls, a NOUL urgency score, a SCORE impact level, a gate decision, an action choice. Plain code only applies policy to what the model decided.\n\nSEND: POST {\"ticket\": \"...\"} (optional \"expected_team\": \"infra\"|\"billing\"|\"sales\") to /webhook/five-questions (activated) or /webhook-test/five-questions (click Execute workflow first). The JSON reply shows every stage, each Laya latency, and totals.\n\nNeeds ollaya on :11435 (laya:en). System 2 (Ollama :11434) runs only when System 1 escalates. Its model name comes from the **S2 Config** workflow (import `workflows/s2-config.json` first) via **Get S2 Model**; edit it there (default `gemma4:12b-mlx`).\n\nDEMO CAVEATS: thresholds (0.7 urgent, 0.6 classify confidence, impact bands) are demo values. Routes are labels only: nothing is paged, queued or sent. The gate is a demo guardrail, NOT a security boundary.",
         "height": 400,
         "width": 1100,
         "color": 4
@@ -398,7 +398,7 @@
     },
     {
       "parameters": {
-        "content": "## 3. RANK\n\nSystem 1 NOUL call scores business impact. The score becomes a priority: P1 >= 0.8, P2 >= 0.5, else P3.",
+        "content": "## 3. RANK\n\nSystem 1 SCORE call picks a business-impact level (low, medium, high). Code maps the expected level to a priority: P1 >= 1.5, P2 >= 0.5, else P3.",
         "height": 300,
         "width": 440,
         "color": 3
@@ -505,18 +505,7 @@
       "main": [
         [
           {
-            "node": "Rank: Laya noul (business impact)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Rank: Laya noul (business impact)": {
-      "main": [
-        [
-          {
-            "node": "Rank (priority from score)",
+            "node": "Rank: Laya score (business impact)",
             "type": "main",
             "index": 0
           }
@@ -630,6 +619,17 @@
         [
           {
             "node": "Choose: Ollama (System 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rank: Laya score (business impact)": {
+      "main": [
+        [
+          {
+            "node": "Rank (priority from score)",
             "type": "main",
             "index": 0
           }
