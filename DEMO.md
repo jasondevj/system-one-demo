@@ -5,44 +5,64 @@ A checklist, not documentation. Setup details live in the [README](README.md).
 ## Before the talk
 
 - [ ] `docker compose up -d` in this repo, then open http://localhost:5678
-- [ ] ollaya running on port 11435, Ollama running on port 11434 (model: `gemma4:12b-mlx`)
+- [ ] ollaya running on port 11435 (System 1)
+- [ ] System 2 backends: Ollama on port 11434 (model: `gemma4:12b-mlx`, used by the five-questions and chat escalations via `S2 Config`) and the OpenAI-compatible endpoint on port 8787 (model: `codex-local`, used by the S2 triage and S2 eval workflows via their **Endpoint Config** node)
 - [ ] All workflows imported and published (active): S2 Config first, then the rest. Keep this copy untouched until the talk.
-- [ ] `tickets` data table still selected in both evaluation nodes of the comparison workflow
+- [ ] Eval setup done once (README step 5c): `tickets eval 10` data table imported and selected in **When fetching a dataset row** of both eval workflows, `comparison runs` table created
 - [ ] Fallback ready: `fallback/capture-canned.sh` re-run, backup recording captured (see the end of this file)
 
 ### Warm up both tiers (do this right before going on stage)
 
 Both models pay a cold-start tax. Fire one throwaway call at each, then keep them warm.
 
-1. **System 1 warmup** - run the step 2 command below once.
-2. **System 2 warmup** - run the enterprise command below once and wait for it to finish. A cold gemma can take two minutes or more (the node timeout is 300 s); if the reply says `human_review`, run it again. Do not go on stage until it returns a System 2 answer.
-3. gemma is dropped from memory after a few idle minutes. If you wait longer than that, repeat step 2.
+1. **System 1 warmup** - run the Tuesday ticket command (section 3) once.
+2. **System 2 warmup** - run the enterprise command (section 3) once and wait for it to finish. A cold gemma can take two minutes or more (the node timeout is 300 s); if the reply says `human_review`, run it again. Do not go on stage until it returns a System 2 answer.
+3. gemma is dropped from memory after a few idle minutes. If you wait longer than that, repeat step 2. The S2 triage/eval endpoint (section 1) warms up the first time you run it.
 
 ## Live run order
 
-### 1. System 1 triage (canvas)
+### 1. S2 triage (canvas)
 
-Run `system1-ticket-triage` from the canvas on the four tickets. Instant answers set the baseline: System 1 gets 4/4 right in well under a second per ticket.
+Open `system2-openai-ticket-triage`, hit **Execute workflow**, and watch System 2 reason through the four tickets via the OpenAI-compatible endpoint (`codex-local` on port 8787, set in **Endpoint Config**). Slow and deliberate: this is what deep reasoning costs, and it sets up the contrast. (The Ollama variant `system2-ticket-triage` reads its model from the `S2 Config` workflow instead.)
 
-### 2. Five questions - Tuesday ticket (System 1 alone)
+### 2. S1 triage (canvas)
 
-```powershell
-Invoke-RestMethod -Uri http://localhost:5678/webhook/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"Every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine."}' | ConvertTo-Json -Depth 6
-```
+Run `system1-ticket-triage` from the canvas on the same four tickets. Instant answers: System 1 gets 4/4 right in well under a second per ticket. The speed and token contrast with step 1 is the point.
 
-Expect (verified on the Mac): all five stages (classify, route, rank, gate, choose), `final_route` = `queue:infra`, `decided_by` = System 1 (Laya), policy in code, about 150 ms in total (classify confidence about 0.78, action `hand_to_team`). Say: "five decisions from all three kinds of System 1 call (choice, noul and score), and the code only applies the rules."
+### 3. Five questions - the three Mac-confirmed paths
 
-Do not use the outage ticket ("Production server is down... revenue impacted") or `hmm` for this step: on the Mac both stopped at the gate and went to `human_review` after four calls. That is a fine side demo of "knowing when not to automate", but it never reaches CHOOSE.
-
-### 3. Five questions - enterprise ticket (escalates to System 2)
+Confirmed on the Mac on Nov 20, before RANK switched from noul to score on the morning of Nov 20 - re-run to re-confirm with the current workflow. Click **Listen for test event** before each `/webhook-test/` request (use `/webhook/` instead when the workflow is active).
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:5678/webhook/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"We are a 500-seat enterprise: your export fails every Tuesday, we were charged twice this month, and we need volume discount pricing. Can someone own all of this?"}' | ConvertTo-Json -Depth 6
+# Path 1 - Human via GATE
+Invoke-RestMethod -Method Post -Uri http://localhost:5678/webhook-test/five-questions -ContentType 'application/json' -Body '{"ticket":"hmm"}' | ConvertTo-Json -Depth 6
+
+# Path 2 - System 1 alone (Tuesday ticket)
+Invoke-RestMethod -Uri http://localhost:5678/webhook-test/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"Every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine."}' | ConvertTo-Json -Depth 6
+
+# Path 3 - System 1 escalates to System 2 (enterprise ticket)
+Invoke-RestMethod -Uri http://localhost:5678/webhook-test/five-questions -Method Post -ContentType 'application/json' -Body '{"ticket":"We are a 500-seat enterprise: your export fails every Tuesday, we were charged twice this month, and we need volume discount pricing. Can someone own all of this?"}' | ConvertTo-Json -Depth 6
 ```
 
-Expect: CLASSIFY confidence about 0.28, so CHOOSE escalates (`policy_overrides` shows "classify confidence < 0.6"). `decided_by` = System 2 (Ollama), after System 1 escalated. Warm, it takes roughly 15 to 110 s. Narrate the wait: "this is what deep reasoning costs. System 1 knew it was unsure in about 300 ms."
+Expected, as recorded on the Mac:
 
-### 4. Chat demo (last)
+- **Path 1:** `human_review` - `decided_by` = System 1 gate -> human, four Laya calls, CHOOSE skipped. A fine side demo of "knowing when not to automate".
+- **Path 2:** Verdict (System 1 decided) - GATE automate, CHOOSE `hand_to_team`, `final_route` = `queue:infra`, about 150 ms in total (classify confidence about 0.78).
+- **Path 3:** CLASSIFY confidence about 0.28, so CHOOSE escalates (`policy_overrides` shows "classify confidence < 0.6"); `decided_by` = System 2 (Ollama), after System 1 escalated. Warm, roughly 15 to 110 s. Narrate the wait: "this is what deep reasoning costs. System 1 knew it was unsure in about 300 ms."
+
+RANK now uses the score type (low / medium / high business impact, mapped to P1 / P2 / P3); the routing rules and the other four stages are unchanged. Say: "five decisions from all three kinds of System 1 call (choice, noul and score), and the code only applies the rules."
+
+Do not use the outage ticket ("Production server is down... revenue impacted") as a path-2 example: on the Mac it stopped at the gate and went to `human_review` after four calls, same as `hmm`. It never reaches CHOOSE.
+
+### 4. S2 10-question eval (canvas)
+
+Run `eval-s2-openai-tickets-10`: n8n walks all 10 labelled tickets (`tickets eval 10` table), one execution per row, and writes the `s2_*` columns - computed route, per-field correctness, token counts, wall and server latency. System 2 answers through the OpenAI-compatible endpoint here. (The Ollama variant is `eval-s2-tickets-10`.)
+
+### 5. S1 10-question eval (canvas)
+
+Run `eval-s1-tickets-10`: the same 10 tickets, the same expected answers, the same routing policy, latency measured the same way on ollaya. The shared table now shows both systems side by side - route correctness and wall latency per ticket. Run the two evals one at a time.
+
+### 6. Chat demo (last)
 
 Open http://localhost:5678/webhook/system1-triage-chat/chat (workflow active). Use these exact messages: the chat gate wants a ticket-shaped message, and a bare ticket gets "Could you tell me a little more?".
 
