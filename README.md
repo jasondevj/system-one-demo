@@ -4,6 +4,8 @@ Companion code for the talk "The Two-Tier AI Stack - Decision and Reasoning" at 
 
 Thesis: System One decides, it doesn't generate. Small decision models answer focused questions (classify, route, rank, gate, choose) in around 100-300 ms, and plain deterministic code acts on the answers. No LLM in the decision loop.
 
+n8n is a visual workflow tool: import this repo's JSON files as workflows, then open each workflow's canvas (the diagram of connected steps) to run it. Each box is a node; double-click a node to inspect its settings and input/output data. The CSV files become Data tables, n8n's built-in storage for the comparison inputs and results.
+
 This README is the reference: what each file is and how to set everything up. The demo-day runbook (checklist, warmup, run order, verified commands) is [DEMO.md](DEMO.md).
 
 ## What's here
@@ -51,7 +53,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Open http://localhost:5678 and create your n8n owner account.
+Open http://localhost:5678 and create your n8n owner account. This is your local n8n login, not an Ollama or ollaya account; Docker runs n8n, while the two model services run on your host machine.
 
 ### 2. Install ollaya and get the decision model
 
@@ -79,7 +81,9 @@ To use a different local model (e.g. `mistral:7b` from `ollama list`), change th
 
 ### 4. Import the workflows
 
-In n8n: Workflows -> Import from File, and pick each JSON from `workflows/`.
+In n8n, create a new workflow, open the **...** menu in the canvas header, choose **Import from File**, and pick a JSON file from `workflows/`. Start with `s2-config.json`; repeat in a new workflow for each remaining file. Importing loads the diagram and settings, it does not run the workflow.
+
+Open an imported workflow from the Workflows list. Double-click a node to edit its settings; return to the canvas when done. **Execute workflow** starts a manual test run. For webhook/chat workflows, **Publish** makes their production URLs live (older n8n versions call this **Activate**); "active" below means published and listening, not merely open in the editor.
 
 Or bulk-import from the terminal (`docker-compose.yml` mounts `./workflows` at `/data/workflows` in the container):
 
@@ -99,7 +103,9 @@ The workflows reach ollaya and Ollama on your host through `host.docker.internal
 
 ## Compare System 1 and System 2 (optional)
 
-Three setups, in order of preference: 5c is the recommended comparison; 5 and 5b are older alternatives kept for reference (5 is the manual same-ticket flow, 5b is the Evaluations-tab variant).
+Three setups, in order of preference: 5c is the recommended comparison; 5 and 5b are older alternatives kept for reference (5 is the manual same-ticket flow, 5b is the Evaluations-tab variant). For a first run, go straight to step 6 after setup; return here when both triage demos work.
+
+For these comparisons, open **Data tables** from n8n's project/Overview area, create a table, and use **Import CSV** to load the named file. To select a table in a workflow, double-click the named node and use its Data table field.
 
 All three use small synthetic datasets with hand-picked expected labels - they demonstrate the evaluation mechanics, they are not accuracy benchmarks.
 
@@ -198,7 +204,9 @@ Reruns and failure handling: in `comparison_runs`, the `latest_s1` / `latest_s2`
 
 ### 6. Run the triage demos
 
-Open System 1 (Laya) Ticket Triage, hit Execute workflow, and watch each ticket come back with a team pick, confidence, urgency score, output token count, and latency in milliseconds. Then run System 2 (Ollama LLM) Ticket Triage the same way to compare. The first System 2 run can take a few minutes while Ollama loads the model into memory; later runs are much faster.
+Open System 1 (Laya) Ticket Triage from the Workflows list, hit Execute workflow on its canvas, and watch each ticket come back with a team pick, confidence, urgency score, output token count, and latency in milliseconds. Then run System 2 (Ollama LLM) Ticket Triage the same way to compare. The first System 2 run can take a few minutes while Ollama loads the model into memory; later runs are much faster.
+
+Double-click a completed node to read its output; the final routing node shows the decision. These two demos contain sample tickets already, so no chat message or terminal request is needed.
 
 [DEMO.md](DEMO.md) has the demo-day runbook: setup checklist, model warmup, run order, and the rehearsed commands for each path.
 
@@ -214,7 +222,7 @@ Open System 1 (Laya) Ticket Triage, hit Execute workflow, and watch each ticket 
 The intent choice needs confidence >= 0.6 to enter ticket triage; an uncertain intent asks for more detail, an invalid or unavailable gate asks the user to retry. Maliciousness takes precedence over intent. These thresholds are demo defaults to test, not a reliable security boundary. Route labels only describe a decision: this workflow does not actually page anyone or create tickets.
 
 1. Import `workflows/system1-ticket-triage-chat.json`. If replacing an older import, deactivate the old chat workflow first, then import the new one and activate it - keep only one active copy for this webhook path. Importing can create a duplicate; an already-imported workflow does not update when you pull.
-2. Open http://localhost:5678/webhook/system1-triage-chat/chat in a browser tab. Hosted chat only listens while the workflow is active.
+2. Open http://localhost:5678/webhook/system1-triage-chat/chat in a browser tab. Hosted chat only listens while the workflow is active; click **Publish** in the workflow header first (or **Activate** on older versions), then type into the chat page.
 3. Try `hello`, then a real ticket such as `I was charged twice for my subscription this month` or `Production server is down, customers cannot log in, revenue impacted`. Check that an angry but legitimate complaint still gets support. Inspect the gate/triage scores in the execution when testing thresholds and escalation.
 
 The gate and confident-ticket paths need only ollaya (port 11435). The low-confidence escalation also needs Ollama (port 11434) with the model set in the `S2 Config` workflow. Not covered by the canned fallback.
@@ -233,8 +241,8 @@ A normal ticket makes five System 1 calls in a row (each roughly 0.5 s on the de
 
 Run it:
 
-1. Import `s2-config.json` first (step 4), then `five-questions-demo.json` (Workflows -> Import from File). If you imported an earlier version, delete or deactivate it first: re-importing creates a duplicate, and an already-imported workflow does not update when you pull.
-2. Either click Execute workflow (it then waits for one call on the test URL), or activate it to use the production URL.
+1. Import `s2-config.json` first (step 4), then `five-questions-demo.json` (canvas **...** menu -> **Import from File**). If you imported an earlier version, delete or deactivate it first: re-importing creates a duplicate, and an already-imported workflow does not update when you pull.
+2. Either click Execute workflow (it then waits for one call on the test URL), or publish/activate it to use the production URL. A webhook is an HTTP address that starts the workflow when it receives a request; clicking Execute alone does not supply a ticket.
 3. Send a ticket from a terminal:
 
 ```
@@ -243,7 +251,7 @@ curl -X POST http://localhost:5678/webhook-test/five-questions \
   -d '{"ticket":"Every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine."}'
 ```
 
-   Use `/webhook/five-questions` instead of `/webhook-test/five-questions` when the workflow is active. Leave out `ticket` to use the double-charge example.
+   Use `/webhook/five-questions` instead of `/webhook-test/five-questions` when the workflow is active. The test URL listens only during a manual test; click Execute again before sending another test request. The production URL stays available while published, without a canvas run waiting. Leave out `ticket` to use the double-charge example.
 4. The JSON reply has `final_route`, `decided_by`, a `stages` object with each step's output, `laya_calls`, `laya_total_ms` and `total_ms`. There are three terminal verdicts: System 1 decided, human via gate, and System 2 answered. The last can still return `human_review` if System 2 is unsure or unavailable. Help-article and team-handoff actions share the System 1 terminal.
 
 To tell the paths apart: four Laya calls with CHOOSE skipped indicates the gate-human terminal; five calls and a System 1 verdict indicates S1 alone; `stages.choose.system_2_usable` and System 2 confidence distinguish a usable S2 answer from its human-review fallback.
