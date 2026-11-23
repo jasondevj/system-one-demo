@@ -15,8 +15,8 @@ A checklist, not documentation. Setup details live in the [README](README.md).
 
 Both models pay a cold-start tax. Fire one throwaway call at each, then keep them warm.
 
-1. **System 1 warmup** - run the Tuesday ticket command (section 3) once.
-2. **System 2 warmup** - run the enterprise command (section 3) once and wait for it to finish. A cold gemma can take two minutes or more (the node timeout is 300 s); if the reply says `human_review`, run it again. Do not go on stage until it returns a System 2 answer.
+1. **System 1 warmup** - run the Tuesday ticket command (section 3.2) once.
+2. **System 2 warmup** - run the enterprise command (section 3.2) once and wait for it to finish. A cold gemma can take two minutes or more (the node timeout is 300 s); if the reply says `human_review`, run it again. Do not go on stage until it returns a System 2 answer.
 3. gemma is dropped from memory after a few idle minutes. If you wait longer than that, repeat step 2.
 
 ## Live run order
@@ -29,9 +29,15 @@ Open `system2-ticket-triage`, hit **Execute workflow**, and watch System 2 reaso
 
 Run `system1-ticket-triage` from the canvas on the same four tickets. Instant answers: System 1 gets 4/4 right in well under a second per ticket. The speed and token contrast with step 1 is the point.
 
-### 3. Five questions - the three Mac-confirmed paths
+### 3.1 Five questions - chat
 
-Confirmed on the Mac on Nov 20, before RANK switched from noul to score on the morning of Nov 20 - re-run to re-confirm with the current workflow. Click **Listen for test event** before each `/webhook-test/` request (use `/webhook/` instead when the workflow is active).
+Use `workflows/five-questions-chat-demo.json` to run the five-question pipeline from an n8n chat window instead of the terminal. On a fresh instance, import `workflows/s2-config.json` first; activate the chat workflow, then open http://localhost:5678/webhook/five-questions-chat/chat and paste a ticket. The reply shows the five stages, per-call latency and verdict. This workflow was exercised on the Mac on Nov 23, including the human-gate and System 2 escalation paths.
+
+The chat accepts only ticket text, so CLASSIFY scoring via `expected_team` is off. The small model can vary between runs, so use the exact examples in section 3.2 and rehearse them before the talk.
+
+### 3.2 Five questions - webhook (terminal)
+
+The existing `workflows/five-questions-openai-demo.json` workflow is kept as a reference and runs from PowerShell. Its three paths were confirmed on the Mac on Nov 20, before RANK switched from noul to score on the morning of Nov 20 - re-run to re-confirm with the current workflow. Click **Listen for test event** before each `/webhook-test/` request (use `/webhook/` instead when the workflow is active).
 
 ```powershell
 # Path 1 - Human via GATE
@@ -53,8 +59,6 @@ Expected, as recorded on the Mac:
 RANK now uses the score type (low / medium / high business impact, mapped to P1 / P2 / P3); the routing rules and the other four stages are unchanged. Say: "five decisions from all three kinds of System 1 call (choice, noul and score), and the code only applies the rules."
 
 Do not use the outage ticket ("Production server is down... revenue impacted") as a path-2 example: on the Mac it stopped at the gate and went to `human_review` after four calls, same as `hmm`. It never reaches CHOOSE.
-
-**Chat variant (no terminal needed):** `five-questions-chat-demo.json` runs the same five-questions pipeline from a chat window, like demo 6. Activate the workflow, open http://localhost:5678/webhook/five-questions-chat/chat and paste a ticket; the reply walks all five stages with per-call latency and the verdict. Same escalations as the webhook version (gate -> human, or CHOOSE -> System 2 via the OpenAI-compatible endpoint). Two differences: the chat takes just the ticket text, so CLASSIFY scoring via `expected_team` is off, and this variant is not Mac-tested yet - run it once before showing it.
 
 ### 4. S2 10-question eval (canvas)
 
