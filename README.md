@@ -19,7 +19,7 @@ Workflows (in `workflows/`):
 - `five-questions-demo.json` - the five-questions slide as one webhook pipeline: System 1 decides at CLASSIFY, ROUTE, RANK, GATE and CHOOSE, code applies policy, with escalation to System 2. See step 8.
 - `five-questions-openai-demo.json` - OpenAI-compatible S2 variant of the five-questions pipeline.
 - `five-questions-chat-demo.json` - the five-questions pipeline behind an n8n chat window instead of the terminal.
-- `s2-config.json` - tiny `S2 Config` workflow holding the System 2 model name. Import it first; the System 2 workflows call it. See step 4.
+- `s2-config.json` - tiny `S2 Config` workflow holding the System 2 model name. The Ollama System 2 workflows call it; the OpenAI-compatible variants and five-questions chat workflow use their own `Endpoint Config` node. See step 4.
 - `compare-s1-s2-evaluation.json` - runs every ticket in a Data Table through both systems in one canvas run and writes side-by-side scored results back. See step 5.
 - `compare-s1-s2-metrics-evaluation.json` - the S1 vs S2 comparison as scored runs in n8n's Evaluations tab. See step 5b.
 - `eval-s1-tickets-10.json` / `eval-s2-tickets-10.json` - the recommended comparison: two independent runs over the same 10 labelled tickets, results side by side in one table. See step 5c.
@@ -77,13 +77,13 @@ ollama pull gemma4:12b-mlx
 ollama pull gemma4:12b
 ```
 
-To use a different local model (e.g. `mistral:7b` from `ollama list`), change the model name once in the `S2 Config` workflow (step 4); all System 2 workflows read it from there.
+To use a different local Ollama model (e.g. `mistral:7b` from `ollama list`), change the model name once in the `S2 Config` workflow (step 4); the Ollama System 2 workflows read it from there. OpenAI-compatible workflows use their own `Endpoint Config` node.
 
 ### 4. Import the workflows
 
-In n8n, create a new workflow, open the **...** menu in the canvas header, choose **Import from File**, and pick a JSON file from `workflows/`. Start with `s2-config.json`; repeat in a new workflow for each remaining file. Importing loads the diagram and settings, it does not run the workflow.
+In n8n, create a new workflow, open the **...** menu in the canvas header, choose **Import from File**, and pick the JSON files you intend to use from `workflows/`. For workflows that call the shared Ollama model, import `s2-config.json` first. Importing loads the diagram and settings, it does not run the workflow.
 
-Open an imported workflow from the Workflows list. Double-click a node to edit its settings; return to the canvas when done. **Execute workflow** starts a manual test run. For webhook/chat workflows, **Publish** makes their production URLs live (older n8n versions call this **Activate**); "active" below means published and listening, not merely open in the editor.
+Open an imported workflow from the Workflows list. Double-click a node to edit its settings; return to the canvas when done. **Execute workflow** starts a manual test run. For webhook/chat workflows, **Publish** makes their production URLs live (older n8n versions call this **Activate**); "active" below means published and listening, not merely open in the editor. The Ollama and OpenAI-compatible terminal five-questions workflows have different workflow IDs but share `/five-questions`; publish only the intended terminal variant, not both at once.
 
 Or bulk-import from the terminal (`docker-compose.yml` mounts `./workflows` at `/data/workflows` in the container):
 
@@ -97,7 +97,7 @@ docker exec system-one-demo-n8n n8n import:workflow --input=/data/workflows/five
 
 All workflow JSON files have fixed `id` fields, so a CLI import updates existing workflows in place. (In the web UI, Import from File into a new blank canvas creates a duplicate - delete old copies first.)
 
-Import `s2-config.json` first. It holds the System 2 model name (default `gemma4:12b-mlx`); the System 2 triage, comparison, chat and five-questions workflows each read it in a Get S2 Model node. To change the model, edit the value in its S2 Model Name node and save - it does not need to be activated, and no other workflow edits are needed. If a Get S2 Model node shows an error, open it and pick `S2 Config` from the workflow list. If the lookup fails, the workflows fall back to `gemma4:12b-mlx` (ignoring your override); to check the link, run one System 2 path and confirm the node's output shows your `model` name.
+Import `s2-config.json` before the Ollama System 2 workflows. It holds the System 2 model name (default `gemma4:12b-mlx`); the Ollama System 2 triage, comparison, chat and original five-questions workflows read it in a Get S2 Model node. OpenAI-compatible workflows and `five-questions-chat-demo.json` instead use their own `Endpoint Config` node. To change the model, edit the value in its S2 Model Name node and save - it does not need to be activated, and no other workflow edits are needed. If a Get S2 Model node shows an error, open it and pick `S2 Config` from the workflow list. If the lookup fails, the workflows fall back to `gemma4:12b-mlx` (ignoring your override); to check the link, run one System 2 path and confirm the node's output shows your `model` name.
 
 The workflows reach ollaya and Ollama on your host through `host.docker.internal` (ports 11435 and 11434). Docker Desktop on Mac and Windows resolves this natively; on Linux see [Fresh machine notes](#fresh-machine-notes).
 
@@ -241,7 +241,7 @@ A normal ticket makes five System 1 calls in a row (each roughly 0.5 s on the de
 
 Run it:
 
-1. Import `s2-config.json` first (step 4), then `five-questions-demo.json` (canvas **...** menu -> **Import from File**). If you imported an earlier version, delete or deactivate it first: re-importing creates a duplicate, and an already-imported workflow does not update when you pull.
+1. Import `s2-config.json` first (step 4), then `five-questions-demo.json` (canvas **...** menu -> **Import from File**). If you use the OpenAI-compatible `five-questions-openai-demo.json` instead, it has its own `Endpoint Config` node and does not use `s2-config.json`. The two terminal workflows share `/five-questions`, so publish only the intended variant. If you imported an earlier version, delete or deactivate it first: re-importing creates a duplicate, and an already-imported workflow does not update when you pull.
 2. Either click Execute workflow (it then waits for one call on the test URL), or publish/activate it to use the production URL. A webhook is an HTTP address that starts the workflow when it receives a request; clicking Execute alone does not supply a ticket.
 3. Send a ticket from a terminal:
 
