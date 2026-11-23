@@ -35,6 +35,15 @@ Use `workflows/five-questions-chat-demo.json` to run the five-question pipeline 
 
 The chat accepts only ticket text, so CLASSIFY scoring via `expected_team` is off. The small model can vary between runs, so use the exact examples in section 3.2 and rehearse them before the talk.
 
+**Sample prompts** - paste these exactly; the small model can vary between runs.
+
+- **Path 1 - Gate to human:** `hmm`
+- **Path 2 - System 1 alone:** `Every Tuesday around 2pm our export job fails, but only for customers on the German login page. Rest of the week it works fine.`
+- **Path 3 - Escalation to System 2:** `We are a 500-seat enterprise: your export fails every Tuesday, we were charged twice this month, and we need volume discount pricing. Can someone own all of this?`
+
+Note: the "production server down" outage ticket also lands on human, so don't use it as the path 2 example.
+
+
 ### 3.2 Five questions - webhook (terminal)
 
 The existing `workflows/five-questions-openai-demo.json` workflow is kept as a reference and runs from PowerShell. Its three paths were confirmed on the Mac on Nov 20, before RANK switched from noul to score on the morning of Nov 20 - re-run to re-confirm with the current workflow. Click **Listen for test event** before each `/webhook-test/` request (use `/webhook/` instead when the workflow is active).
