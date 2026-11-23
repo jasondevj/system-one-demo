@@ -54,6 +54,8 @@ RANK now uses the score type (low / medium / high business impact, mapped to P1 
 
 Do not use the outage ticket ("Production server is down... revenue impacted") as a path-2 example: on the Mac it stopped at the gate and went to `human_review` after four calls, same as `hmm`. It never reaches CHOOSE.
 
+**Chat variant (no terminal needed):** `five-questions-chat-demo.json` runs the same five-questions pipeline from a chat window, like demo 6. Activate the workflow, open http://localhost:5678/webhook/five-questions-chat/chat and paste a ticket; the reply walks all five stages with per-call latency and the verdict. Same escalations as the webhook version (gate -> human, or CHOOSE -> System 2 via the OpenAI-compatible endpoint). Two differences: the chat takes just the ticket text, so CLASSIFY scoring via `expected_team` is off, and this variant is not Mac-tested yet - run it once before showing it.
+
 ### 4. S2 10-question eval (canvas)
 
 Run `eval-s2-tickets-10`: n8n walks all 10 labelled tickets (`tickets eval 10` table), one execution per row, and writes the `s2_*` columns - computed route, per-field correctness, token counts, wall and server latency. S2 runs through Ollama (model from the `S2 Config` workflow). (An OpenAI-compatible variant, `eval-s2-openai-tickets-10`, is also in the repo.)
