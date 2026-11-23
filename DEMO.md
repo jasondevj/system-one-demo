@@ -7,7 +7,7 @@ A checklist, not documentation. Setup details live in the [README](README.md).
 - [ ] `docker compose up -d` in this repo, then open http://localhost:5678
 - [ ] ollaya running on port 11435 (System 1)
 - [ ] Ollama running on port 11434 (System 2; model: `gemma4:12b-mlx`, set in the `S2 Config` workflow)
-- [ ] All workflows imported and published (active): S2 Config first, then the rest. Keep this copy untouched until the talk.
+- [ ] Required workflows imported. Publish only the intended terminal five-questions variant; both terminal workflows use the same webhook path (`/five-questions`). Keep this copy untouched until the talk.
 - [ ] Eval setup done once (README step 5c): `tickets eval 10` data table imported and selected in **When fetching a dataset row** of both eval workflows, `comparison runs` table created
 - [ ] Fallback ready: `fallback/capture-canned.sh` re-run, backup recording captured (see the end of this file)
 
@@ -31,7 +31,7 @@ Run `system1-ticket-triage` from the canvas on the same four tickets. Instant an
 
 ### 3.1 Five questions - chat
 
-Use `workflows/five-questions-chat-demo.json` to run the five-question pipeline from an n8n chat window instead of the terminal. On a fresh instance, import `workflows/s2-config.json` first; activate the chat workflow, then open http://localhost:5678/webhook/five-questions-chat/chat and paste a ticket. The reply shows the five stages, per-call latency and verdict. This workflow was exercised on the Mac on Nov 23, including the human-gate and System 2 escalation paths.
+Use `workflows/five-questions-chat-demo.json` to run the five-question pipeline from an n8n chat window instead of the terminal. On a fresh instance, edit the chat workflow's **Endpoint Config** node for your OpenAI-compatible endpoint (base URL, model and API key if required); it does not use `s2-config.json`. Publish the chat workflow, then open http://localhost:5678/webhook/five-questions-chat/chat and paste a ticket. The reply shows the five stages, per-call latency and verdict. This workflow was exercised on the Mac on Nov 23, including the human-gate and System 2 escalation paths.
 
 The chat accepts only ticket text, so CLASSIFY scoring via `expected_team` is off. The small model can vary between runs, so use the exact examples in section 3.2 and rehearse them before the talk.
 
@@ -46,7 +46,7 @@ Note: the "production server down" outage ticket also lands on human, so don't u
 
 ### 3.2 Five questions - webhook (terminal)
 
-The existing `workflows/five-questions-openai-demo.json` workflow is kept as a reference and runs from PowerShell. Its three paths were confirmed on the Mac on Nov 20, before RANK switched from noul to score on the morning of Nov 20 - re-run to re-confirm with the current workflow. Click **Listen for test event** before each `/webhook-test/` request (use `/webhook/` instead when the workflow is active).
+The existing `workflows/five-questions-openai-demo.json` workflow is kept as a reference and runs from PowerShell. Its three paths were confirmed on the Mac on Nov 20, before RANK switched from noul to score on the morning of Nov 20 - re-run to re-confirm with the current workflow. Click **Listen for test event** before each `/webhook-test/` request (use `/webhook/` instead when the workflow is active). The Ollama and OpenAI-compatible terminal workflows both use `/five-questions`; publish only the intended variant, not both at once.
 
 ```powershell
 # Path 1 - Human via GATE
