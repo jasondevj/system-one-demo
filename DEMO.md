@@ -8,7 +8,7 @@ A checklist, not documentation. Setup details live in the [README](README.md).
 - [ ] ollaya running on port 11435 (System 1)
 - [ ] Ollama running on port 11434 (System 2; model: `gemma4:12b-mlx`, set in the `S2 Config` workflow)
 - [ ] Required workflows imported. Publish only the intended terminal five-questions variant; both terminal workflows use the same webhook path (`/five-questions`). Keep this copy untouched until the talk.
-- [ ] Eval setup done once (README step 5c): `tickets eval 10` data table imported and selected in **When fetching a dataset row** of both eval workflows, `comparison runs` table created
+- [ ] Eval setup done once (REPO_DETAILS.md, recommended eval pair): `tickets eval 10` data table imported and selected in **When fetching a dataset row** of both eval workflows, `comparison runs` table created
 - [ ] Fallback ready: `fallback/capture-canned.sh` re-run, backup recording captured (see the end of this file)
 
 ### Warm up both tiers (do this right before going on stage)
@@ -94,7 +94,7 @@ Caution: the System 2 chat reply waits on gemma. Keep it warm (see the warmup se
 ## If something breaks
 
 - Slow or hung System 2: wait up to two minutes, then re-run (the model is loaded by then).
-- ollaya down: use the canned responder (README, "Fallback plan").
+- ollaya down: use the canned responder (REPO_DETAILS.md, "Fallback plan").
 - Everything down: play the recorded backup (`fallback/recording-shot-list.md` has the shot order).
 
 ## Fallback pointers
